@@ -30,7 +30,7 @@ const INITIAL: BirthProfile & { transitDate: string } = {
   latitude: 10.5881,
   longitude: 77.2478,
   timezoneOffsetMinutes: 330,
-  panchangamMode: 'VAKYA',
+  panchangamMode: 'THIRUKANITHAM',
   transitDate: today(),
 };
 
