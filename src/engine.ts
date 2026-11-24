@@ -1,8 +1,10 @@
 // Mithran Predictions — Pure TypeScript Jothidam Engine
-// JD, Lahiri Ayanamsa, Meeus Sun/Moon, JPL Keplerian planets, Lagna, D9, D10,
+// JD, Lahiri Ayanamsa, astronomy-engine (VSOP87-grade) ephemeris, Lagna, D9, D10,
 // Two-pass dignity/yoga evaluator, 337-bindu Ashtakavarga, Vimshottari Dasa (Maha-Bhukti-Antara),
 // Gochara with double-transit, full Graha Drishti model, Shadbala components,
 // and deterministic multi-factor classical prediction synthesis with factor ledgers.
+
+import { Body, Ecliptic, GeoVector } from 'astronomy-engine';
 
 export type Lang = 'ta' | 'en';
 export type PanchangamMode = 'THIRUKANITHAM' | 'VAKYA';
@@ -30,55 +32,24 @@ export function lahiriAyanamsa(jd: number) {
 }
 const VAKYA_OFFSET: Record<string, number> = { Sun: -1.18, Moon: 0.82, Mars: -0.64, Mercury: 0.41, Jupiter: -0.93, Venus: 0.33, Saturn: -0.71, Rahu: 1.05, Ketu: 1.05, Lagna: -0.85 };
 
-function sunLongitude(jd: number) {
-  const T = (jd - 2451545.0) / 36525;
-  const L0 = norm360(280.46646 + 36000.76983 * T + 0.0003032 * T * T);
-  const M = 357.52911 + 35999.05029 * T - 0.0001537 * T * T;
-  const C = (1.914602 - 0.004817 * T - 0.000014 * T * T) * sin(M) + (0.019993 - 0.000101 * T) * sin(2 * M) + 0.000289 * sin(3 * M);
-  const trueLong = L0 + C;
-  const omega = 125.04 - 1934.136 * T;
-  return norm360(trueLong - 0.00569 - 0.00478 * sin(omega));
+// Geocentric apparent ecliptic longitudes (tropical, of-date) via astronomy-engine:
+// VSOP87-based planetary theory + dedicated lunar theory — arcminute-grade across 1900-2100.
+// (The previous in-house Keplerian approximation had a radians/degrees bug inside Kepler's
+// equation and omitted the Jupiter-Saturn inequality; it was degrees off for Mars/Jupiter/Saturn.)
+const jdToDate = (jd: number) => new Date((jd - 2440587.5) * 86400000);
+const AE_BODIES = ['Sun', 'Moon', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn'] as const;
+function geoEclipticLongitude(body: string, jd: number): number {
+  const vec = GeoVector(body as Body, jdToDate(jd), true);
+  return norm360(Ecliptic(vec).elon);
 }
-function moonLongitude(jd: number) {
-  const T = (jd - 2451545.0) / 36525;
-  const Lp = norm360(218.3164477 + 481267.88123421 * T - 0.0015786 * T * T + T * T * T / 538841 - T * T * T * T / 65194000);
-  const D = 297.8501921 + 445267.1114034 * T - 0.0018819 * T * T + T * T * T / 545868 - T * T * T * T / 113065000;
-  const M = 357.5291092 + 35999.0502909 * T - 0.0001536 * T * T + T * T * T / 24490000;
-  const Mp = 134.9633964 + 477198.8675055 * T + 0.0087414 * T * T + T * T * T / 69699 - T * T * T * T / 14712000;
-  const F = 93.2720950 + 483202.0175233 * T - 0.0036539 * T * T + T * T * T / 3526000 - T * T * T * T / 863310000;
-  return norm360(Lp + 6.288774 * sin(Mp) + 1.274027 * sin(2 * D - Mp) + 0.658314 * sin(2 * D) + 0.213618 * sin(2 * Mp) - 0.185116 * sin(M) - 0.114332 * sin(2 * F) + 0.058465 * sin(2 * D - 2 * Mp) + 0.057069 * sin(2 * D - Mp - M) + 0.053322 * sin(2 * D + Mp) + 0.045758 * sin(2 * D - M) + 0.040923 * sin(Mp - M) + 0.034720 * sin(Mp + M) - 0.030383 * sin(M + 2 * F) - 0.015327 * sin(2 * D - Mp + M) - 0.012528 * sin(2 * F - Mp) - 0.010980 * sin(2 * F + Mp));
-}
-const KEPLER: Record<string, { a: number; e: number; I: number; L: number; peri: number; node: number; ar: number; er: number; Ir: number; Lr: number; perir: number; noder: number }> = {
-  Mercury: { a: 0.38709927, e: 0.20563593, I: 7.00497902, L: 252.25032350, peri: 77.45779628, node: 48.33076593, ar: 0.00000037, er: 0.00001906, Ir: -0.00594749, Lr: 149472.67411175, perir: 0.16047689, noder: -0.12534081 },
-  Venus: { a: 0.72333566, e: 0.00677672, I: 3.39467605, L: 181.97909950, peri: 131.60246718, node: 76.67984255, ar: 0.00000390, er: -0.00004107, Ir: -0.00078890, Lr: 58517.81538729, perir: 0.00268329, noder: -0.27769418 },
-  Mars: { a: 1.52371034, e: 0.09339410, I: 1.84969142, L: -4.55343205, peri: -23.94362959, node: 49.55953891, ar: 0.00001847, er: 0.00007882, Ir: -0.00813131, Lr: 19140.30268499, perir: 0.44441088, noder: -0.29257343 },
-  Jupiter: { a: 5.20288700, e: 0.04838624, I: 1.30439695, L: 34.39644051, peri: 14.72847983, node: 100.47390909, ar: -0.00011607, er: -0.00013253, Ir: -0.00183714, Lr: 3034.74612775, perir: 0.21252668, noder: 0.20469106 },
-  Saturn: { a: 9.53667594, e: 0.05386179, I: 2.48599187, L: 49.95424423, peri: 92.59887831, node: 113.66242448, ar: -0.00125060, er: -0.00050991, Ir: 0.00193609, Lr: 1222.49362201, perir: -0.41897216, noder: -0.28867794 },
-};
-function keplerE(M: number, e: number) { let E = M + e * sin(M) * (1 + e * cos(M)); for (let i = 0; i < 8; i++) E = E - (E - e * sin(E) - M) / (1 - e * cos(E)); return E; }
-function planetGeoLongitude(name: string, jd: number) {
-  const k = KEPLER[name]; const T = (jd - 2451545.0) / 36525;
-  const a = k.a + k.ar * T, e = k.e + k.er * T, I = k.I + k.Ir * T;
-  const L = norm360(k.L + k.Lr * T), peri = k.peri + k.perir * T, node = norm360(k.node + k.noder * T);
-  const w = peri - node;
-  const M = norm360(L - peri);
-  const E = keplerE(M * D2R, e) * R2D;
-  const xv = a * (cos(E) - e), yv = a * Math.sqrt(1 - e * e) * sin(E);
-  const v = atan2d(yv, xv), r = Math.sqrt(xv * xv + yv * yv);
-  const xh = r * (cos(node) * cos(v + w) - sin(node) * sin(v + w) * cos(I));
-  const yh = r * (sin(node) * cos(v + w) + cos(node) * sin(v + w) * cos(I));
-  const sunLon = sunLongitude(jd);
-  return norm360(atan2d(yh - sin(sunLon + 180), xh - cos(sunLon + 180)));
-}
-function meanNode(jd: number) { const T = (jd - 2451545.0) / 36525; return norm360(125.04452 - 1934.136261 * T + 0.0020708 * T * T + T * T * T / 450000); }
 export function tropicalLongitudes(jd: number): Record<string, number> {
   const out: Record<string, number> = {};
-  out.Sun = sunLongitude(jd); out.Moon = moonLongitude(jd);
-  for (const p of ['Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn']) out[p] = planetGeoLongitude(p, jd);
+  for (const b of AE_BODIES) out[b] = geoEclipticLongitude(b, jd);
   out.Rahu = meanNode(jd);
   out.Ketu = norm360(out.Rahu + 180);
   return out;
 }
+function meanNode(jd: number) { const T = (jd - 2451545.0) / 36525; return norm360(125.04452 - 1934.136261 * T + 0.0020708 * T * T + T * T * T / 450000); }
 export function siderealLongitudes(jd: number, mode: PanchangamMode) {
   const trop = tropicalLongitudes(jd); const ayan = lahiriAyanamsa(jd);
   const out: Record<string, number> = {};
