@@ -640,12 +640,7 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
                   <button className="pdf-btn" onClick={() => { setResult(null); }}>
                     {uiLang === 'ta' ? 'மீண்டும் உருவாக்கு' : 'Generate Again'}
                   </button>
-                </div>
-                <iframe className="pdf-preview" src={result.url} title="Jathagam PDF preview" />
-                <div className="pdf-hint">
-                  {uiLang === 'ta'
-                    ? 'குறிப்பு: இந்த முன்னோட்ட சாண்ட்பாக்ஸ் பதிவிறக்கங்களைத் தடுக்கும் — மேலே உள்ள காட்சியில் PDF-ஐப் பார்த்து, காட்சியின் பதிவிறக்க பொத்தானை அல்லது Ctrl+P → Save as PDF பயன்படுத்தவும். நேரடி தளத்தில் Download பொத்தான் நேரடியாக இயங்கும்.'
-                    : 'Note: this preview sandbox may block downloads — view the PDF above and use the viewer\u2019s download button or Ctrl+P \u2192 Save as PDF. On the live site the Download button works directly.'}
+                  <button className="modal-x" onClick={() => setOpen(false)} aria-label="close">×</button>
                 </div>
               </div>
             )}
