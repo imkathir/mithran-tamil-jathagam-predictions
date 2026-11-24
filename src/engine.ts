@@ -95,8 +95,10 @@ export function lagnaSidereal(jd: number, lat: number, lonEast: number, mode: Pa
   gmst = norm360(gmst);
   const lst = norm360(gmst + lonEast);
   const eps = 23.439291 - 0.0130042 * T - 0.00000164 * T * T;
-  const y = -cos(lst);
-  const x = sin(lst) * cos(eps) + tan(lat) * sin(eps);
+  // Standard ascendant: atan2(cos θ, -(sin θ·cos ε + tan φ·sin ε)); the previous
+  // sign-negated pair returned the DESCENDANT (lagna + 180°) — six signs off.
+  const y = cos(lst);
+  const x = -(sin(lst) * cos(eps) + tan(lat) * sin(eps));
   let sid = norm360(atan2d(y, x) - lahiriAyanamsa(jd));
   if (mode === 'VAKYA') sid = norm360(sid + VAKYA_OFFSET.Lagna);
   return { lagna: sid, lst, gmst, eps };
