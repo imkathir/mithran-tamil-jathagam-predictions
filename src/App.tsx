@@ -113,8 +113,7 @@ function Shell() {
   const [lang, setLang] = useState<Lang>('ta');
   const [form, setForm] = useState(INITIAL);
   const [section, setSection] = useState<SectionKey>('chart');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
   // pre-loaded sample chart on mount (lazy initial state, single-session)
   const [dossier, setDossier] = useState<Dossier | null>(() => computeDossier(INITIAL, INITIAL.transitDate));
   const [selId, setSelId] = useState<string>('Sun');
@@ -127,19 +126,11 @@ function Shell() {
     setDossier(d);
   };
 
+  // Keep the active section tab in view inside the (scrollable) nav strip.
   useEffect(() => {
-    if (!menuOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
+    const el = navRef.current?.querySelector('button.active') as HTMLElement | null;
+    el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [section]);
 
   const [poruthamData, setPoruthamData] = useState<PdfPoruthamData | null>(() => samplePorutham());
   const timelineRows = useMemo(() => (dossier ? buildTimeline(dossier, new Date()) : []), [dossier]);
@@ -148,46 +139,31 @@ function Shell() {
     <LangCtx.Provider value={lang}>
       <div className={`shell lang-${lang}`} lang={lang}>
         <div className="topbar">
-          <div className="wordmark">
-            <span className="mark">{pick(langStr.wordmark, lang)}</span>
-            <span className="sub">{pick(langStr.wordmarkSub, lang)}</span>
-          </div>
-          <div className="nav-menu" ref={menuRef}>
-            <button
-              className={`menu-btn${menuOpen ? ' open' : ''}`}
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-expanded={menuOpen}
-              aria-haspopup="menu"
-            >
-              <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              <span className="menu-current">{pick(langStr[NAV_ITEMS.find(([k]) => k === section)![1]], lang)}</span>
-              <svg className="chev" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round" />
-              </svg>
-            </button>
-            {menuOpen && (
-              <div className="menu-pop" role="menu">
-                {NAV_ITEMS.map(([k, s]) => (
-                  <button
-                    key={k}
-                    role="menuitem"
-                    className={section === k ? 'active' : ''}
-                    onClick={() => { setSection(k); setMenuOpen(false); }}
-                  >
-                    {pick(langStr[s], lang)}
-                    {section === k && <span className="menu-check">·</span>}
-                  </button>
-                ))}
+          <div className="topbar-row">
+            <div className="wordmark">
+              <span className="mark">{pick(langStr.wordmark, lang)}</span>
+              <span className="sub">{pick(langStr.wordmarkSub, lang)}</span>
+            </div>
+            <div className="topbar-actions">
+              <div className="langtoggle">
+                <button className={lang === 'ta' ? 'active' : ''} onClick={() => setLang('ta')}>தமிழ்</button>
+                <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>English</button>
               </div>
-            )}
+              {dossier && <PdfDossier d={dossier} rows={timelineRows} porutham={poruthamData} uiLang={lang} />}
+            </div>
           </div>
-          <div className="langtoggle">
-            <button className={lang === 'ta' ? 'active' : ''} onClick={() => setLang('ta')}>தமிழ்</button>
-            <button className={lang === 'en' ? 'active' : ''} onClick={() => setLang('en')}>English</button>
-          </div>
-          {dossier && <PdfDossier d={dossier} rows={timelineRows} porutham={poruthamData} uiLang={lang} />}
+          <nav className="topnav" ref={navRef} aria-label={lang === 'ta' ? 'பிரிவுகள்' : 'Sections'}>
+            {NAV_ITEMS.map(([k, s]) => (
+              <button
+                key={k}
+                className={section === k ? 'active' : ''}
+                aria-current={section === k ? 'page' : undefined}
+                onClick={() => setSection(k)}
+              >
+                {pick(langStr[s], lang)}
+              </button>
+            ))}
+          </nav>
         </div>
 
         <Rail form={form} setForm={setForm} onCalc={() => calc(form)} onReset={() => { setForm(INITIAL); calc(INITIAL); }} lang={lang} />

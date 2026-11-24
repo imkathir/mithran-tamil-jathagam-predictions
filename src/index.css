@@ -71,19 +71,28 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 .shell { max-width: 1240px; margin: 0 auto; padding: 0 28px 96px; }
 
 .topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 22px 0 18px; border-bottom: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 18px 0 0; border-bottom: 1px solid var(--border);
   position: sticky; top: 0; background: rgba(255,255,255,0.96); backdrop-filter: blur(6px); z-index: 20;
 }
+.topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.topbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .wordmark { display: flex; align-items: baseline; gap: 10px; }
 .wordmark .mark { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
 .wordmark .sub { font-size: 11.5px; color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase; }
 
-.topnav { display: flex; gap: 26px; }
+.topnav {
+  display: flex; gap: 22px; overflow-x: auto; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.topnav::-webkit-scrollbar { display: none; }
 .topnav button {
-  font-size: 13px; color: var(--muted); padding: 4px 0;
+  font-size: 13px; color: var(--muted); white-space: nowrap;
+  padding: 8px 2px 11px; min-height: 44px;
   border-bottom: 2px solid transparent;
 }
+.topnav button:first-child { padding-left: 0; }
+.topnav button:hover { color: var(--foreground); }
 .topnav button.active { color: var(--foreground); border-bottom-color: var(--primary); font-weight: 600; }
 
 .langtoggle { display: flex; gap: 2px; border: 1px solid var(--border); border-radius: 6px; padding: 2px; }
@@ -389,39 +398,6 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
   .tl-head { grid-template-columns: 1fr; }
 }
 
-/* ---- Section menu (dropdown) ---- */
-.nav-menu { position: relative; }
-.menu-btn {
-  display: flex; align-items: center; gap: 9px;
-  font-size: 13px; color: var(--foreground); font-weight: 600;
-  border: 1px solid var(--border); border-radius: 6px; padding: 8px 13px;
-  background: var(--background);
-}
-.menu-btn:hover { border-color: var(--foreground); }
-.menu-btn .chev { transition: transform 0.15s ease; color: var(--muted); }
-.menu-btn.open .chev { transform: rotate(180deg); }
-.menu-current { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.menu-pop {
-  position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-  min-width: 232px; background: var(--background);
-  border: 1px solid var(--border); border-radius: 8px;
-  z-index: 40; overflow: hidden;
-}
-.menu-pop button {
-  display: flex; justify-content: space-between; align-items: baseline;
-  width: 100%; text-align: left; padding: 11px 16px;
-  font-size: 13px; color: var(--muted);
-  border-bottom: 1px solid var(--border);
-}
-.menu-pop button:last-child { border-bottom: none; }
-.menu-pop button:hover { background: var(--surface-2); color: var(--foreground); }
-.menu-pop button.active { color: var(--primary); font-weight: 600; }
-.menu-check { color: var(--primary); }
-
-@media (max-width: 720px) {
-  .menu-current { max-width: 120px; }
-}
-
 /* ---- Reference Guide ---- */
 .ref-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .planet-pill {
@@ -599,7 +575,7 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
    ============================================================ */
 
 /* Kill double-tap zoom delay; comfortable tap targets on controls */
-button, .planet-pill, .m36-cell, .dasa-seg, .menu-pop button, .modal-check {
+button, .planet-pill, .m36-cell, .dasa-seg, .modal-check {
   touch-action: manipulation;
 }
 @media (max-width: 720px) {
@@ -609,19 +585,17 @@ button, .planet-pill, .m36-cell, .dasa-seg, .menu-pop button, .modal-check {
   .shell { padding: 0 14px 80px; }
   .panel { padding: 14px 15px; }
 
-  /* Topbar wraps cleanly: wordmark row + controls row */
-  .topbar { flex-wrap: wrap; gap: 10px 14px; padding: 14px 0 12px; }
-  .topnav { gap: 18px; }
-  .topnav button { padding: 8px 2px; min-height: 40px; }
+  /* Topbar wraps cleanly: brand+actions row, then scrollable section tabs */
+  .topbar { gap: 8px; padding: 12px 0 0; }
+  .topbar-row { gap: 10px; }
+  .topnav { gap: 18px; margin: 0 -14px; padding: 0 14px; }
+  .topnav button { padding: 9px 2px 12px; font-size: 13.5px; }
   .langtoggle button { padding: 8px 14px; min-height: 40px; }
-  .menu-btn, .pdf-btn { min-height: 42px; }
+  .pdf-btn { min-height: 42px; }
   .paarvai-toggle { padding: 8px 12px; min-height: 40px; }
   .planet-pill { padding: 9px 13px; }
   .btn-primary { width: 100%; text-align: center; padding: 14px 20px; }
   .btn-ghost { padding: 13px 10px; }
-
-  /* Section menu popup stays on-screen */
-  .menu-pop { left: auto; right: 0; transform: none; max-width: calc(100vw - 28px); }
 
   /* Rail: single-column form */
   .rail { grid-template-columns: 1fr; gap: 14px; padding: 18px 0; }
