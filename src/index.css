@@ -17,6 +17,8 @@
   --sans-ta: 'Noto Sans Tamil', sans-serif;
   --sans-en: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
   --mono: 'JetBrains Mono', monospace;
+  --tamil: 'Noto Sans Tamil', sans-serif;
+  --english: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,6 +32,7 @@ body {
   font-size: 14px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
 }
 
 html[lang='ta'] body, .lang-ta {
@@ -104,6 +107,15 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 .mode-switch { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .mode-switch button { flex: 1; font-size: 12px; padding: 8px 10px; color: var(--muted); }
 .mode-switch button.active { background: var(--primary); color: #fff; font-weight: 600; }
+
+/* Segmented rectangular filter buttons (same discipline as mode-switch) */
+.seg { display: flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button {
+  flex: 1; white-space: nowrap; font-size: 12px; padding: 8px 12px;
+  color: var(--muted); border-right: 1px solid var(--border); min-height: 38px;
+}
+.seg button:last-child { border-right: none; }
+.seg button.on { background: var(--foreground); color: #fff; font-weight: 600; }
 
 .btn-primary {
   background: var(--primary); color: #fff; font-weight: 600;
@@ -580,4 +592,114 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
   tr { break-inside: avoid; page-break-inside: avoid; }
   thead { display: table-header-group; }
   .m36-pred p, .pred-body, .ledger-value { white-space: normal; overflow: visible; text-overflow: clip; }
+}
+
+/* ============================================================
+   Mobile & touch usability (mobile-first web app)
+   ============================================================ */
+
+/* Kill double-tap zoom delay; comfortable tap targets on controls */
+button, .planet-pill, .m36-cell, .dasa-seg, .menu-pop button, .modal-check {
+  touch-action: manipulation;
+}
+@media (max-width: 720px) {
+  /* 16px inputs — prevents iOS focus auto-zoom */
+  input, select { font-size: 16px; }
+
+  .shell { padding: 0 14px 80px; }
+  .panel { padding: 14px 15px; }
+
+  /* Topbar wraps cleanly: wordmark row + controls row */
+  .topbar { flex-wrap: wrap; gap: 10px 14px; padding: 14px 0 12px; }
+  .topnav { gap: 18px; }
+  .topnav button { padding: 8px 2px; min-height: 40px; }
+  .langtoggle button { padding: 8px 14px; min-height: 40px; }
+  .menu-btn, .pdf-btn { min-height: 42px; }
+  .paarvai-toggle { padding: 8px 12px; min-height: 40px; }
+  .planet-pill { padding: 9px 13px; }
+  .btn-primary { width: 100%; text-align: center; padding: 14px 20px; }
+  .btn-ghost { padding: 13px 10px; }
+
+  /* Section menu popup stays on-screen */
+  .menu-pop { left: auto; right: 0; transform: none; max-width: calc(100vw - 28px); }
+
+  /* Rail: single-column form */
+  .rail { grid-template-columns: 1fr; gap: 14px; padding: 18px 0; }
+  .rail .row3 { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* Dense data rows stack instead of squeezing */
+  .graha-row, .graha-list-wide .graha-row { grid-template-columns: 24px 1fr auto; row-gap: 3px; }
+  .graha-row > span:nth-child(3),
+  .graha-row > span:nth-child(4),
+  .graha-row > span:nth-child(5) { grid-column: 2 / 4; }
+  .graha-row > span:nth-child(6) { grid-column: 3; grid-row: 1; }
+  .graha-row-head { display: none; }
+
+  .ledger-row { grid-template-columns: 18px 1fr; }
+  .ledger-value { grid-column: 2; }
+
+  .yoga-row { grid-template-columns: 1fr auto; row-gap: 2px; }
+  .yoga-row .ye { grid-column: 1 / 3; }
+
+  .gochara-row { grid-template-columns: 24px 1fr; row-gap: 2px; }
+  .gochara-row > span:nth-child(n + 3) { grid-column: 2; }
+
+  .porutham-row { grid-template-columns: 1fr auto; }
+  .porutham-row .pr-pts { grid-column: 2; grid-row: 1; }
+  .porutham-row .pr-status { grid-column: 1 / 3; grid-row: 2; }
+  .porutham-row .pr-detail { grid-column: 1 / 3; grid-row: 3; }
+
+  .ref-tr, .nak-table .ref-tr { grid-template-columns: 1fr 1fr; }
+  .ref-tr.ref-th { display: none; }
+
+  /* Swipeable dense strips — tap targets instead of 9px slivers */
+  .m36-strip { overflow-x: auto; -webkit-overflow-scrolling: touch; height: 72px; padding-bottom: 2px; }
+  .m36-cell { flex: 0 0 34px; }
+  .m36-bar-wrap { height: 48px; }
+  .dasa-track { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .dasa-strip { min-width: 540px; }
+  .dasa-seg { min-height: 56px; }
+
+  .sav-cell { padding: 6px 1px; }
+  .sav-cell .v { font-size: 12px; }
+
+  /* Modal: bottom-sheet proportions, dynamic viewport height */
+  .modal-backdrop { padding: 10px; align-items: flex-end; }
+  .modal {
+    max-width: 640px;
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    border-radius: 12px;
+  }
+  .modal-x { padding: 8px 10px; margin: -8px -10px 0 0; min-width: 40px; min-height: 40px; }
+  .modal-foot { flex-wrap: wrap; gap: 12px; }
+  .modal-foot .primary-btn { min-height: 44px; }
+  .modal-check { min-height: 40px; padding: 8px 0; }
+  .modal-check input { width: 17px; height: 17px; }
+
+  .footnote { flex-wrap: wrap; gap: 8px; }
+  .section-head { flex-wrap: wrap; gap: 6px 12px; }
+  .pred-head { flex-wrap: wrap; }
+  .panel-title { flex-wrap: wrap; gap: 4px 12px; }
+  .score-hero { flex-wrap: wrap; }
+  .m36-row-head { flex-wrap: wrap; }
+}
+
+@media (max-width: 560px) {
+  .pf-grid { grid-template-columns: 1fr; }
+  .rail .row2, .rail .row3 { grid-template-columns: 1fr 1fr; }
+  .tl-guidance { grid-template-columns: 1fr; gap: 4px; }
+  .bhukti-row { grid-template-columns: 82px 1fr; }
+  .bhukti-row > :nth-child(3) { grid-column: 2; }
+  .bar-row { grid-template-columns: 92px 1fr 42px; gap: 8px; }
+
+  /* Chart cells: slightly smaller type so full Tamil names fit 4 columns */
+  .si-chart { grid-template-rows: repeat(4, minmax(58px, auto)); }
+  .si-cell { padding: 4px 4px; }
+  .si-cell .graha-line { font-size: 9.5px; }
+  .si-cell .graha-line .deg { font-size: 8.5px; }
+  .si-cell .rasi-tag { font-size: 8px; }
+  .si-center .t { font-size: 10.5px; }
+  .si-center .s { font-size: 8.5px; }
 }
