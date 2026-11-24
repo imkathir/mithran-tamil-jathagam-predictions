@@ -91,6 +91,9 @@ const PDF_CSS = `
 .p-verdict .vs { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #B91C1C; font-weight: 700; }
 .p-body p { margin: 6px 0; color: #3F3F46; font-size: 9.5px; line-height: 1.65; }
 .p-atom { width: 100%; }
+.p-h3 { break-after: avoid; page-break-after: avoid; }
+.p-tbl td, .p-tbl th { overflow: visible; line-height: 1.6; }
+.center.wm { color: #D4D4D8; letter-spacing: 2px; font-size: 11px; }
 tr { break-inside: avoid; page-break-inside: avoid; }
 thead { display: table-header-group; }
 `;
@@ -105,7 +108,7 @@ function siTable(grid: Record<number, string[]>, lagnaRasi: number, label: strin
     const tds: string[] = [];
     for (let col = 0; col < 4; col++) {
       const rasi = Object.keys(GRID).find((k) => GRID[Number(k)][0] === row && GRID[Number(k)][1] === col);
-      if (rasi === undefined) { tds.push('<td class="center">Mithran</td>'); continue; }
+      if (rasi === undefined) { tds.push(row === 1 && col === 1 ? '<td class="center wm">மித்ரன்</td>' : '<td></td>'); continue; }
       const ri = Number(rasi);
       const lines = (grid[ri] ?? []).map((s) => {
         const id = s.split(' ')[0];
@@ -174,7 +177,7 @@ export function section36Months(d: Dossier, dl: DocLang): Atom[] {
         <td class="n c pk">${m.index}</td>
         <td class="pk">${esc(BI(m.label, dl))}</td>
         <td class="n">${esc(pn(m.maha, dl))}–${esc(pn(m.bhukti, dl))}–${esc(pn(m.antara, dl))}</td>
-        <td>${esc(BI(m.transitSummary, dl))}${m.gocharaFlags.length ? `<div class="p-note">${m.gocharaFlags.map((f) => esc(BI(f.label, dl))).join(' · ')}</div>` : ''}</td>
+        <td><bdi>${esc(BI(m.transitSummary, dl))}</bdi>${m.gocharaFlags.length ? `<div class="p-note">${m.gocharaFlags.map((f) => esc(BI(f.label, dl))).join(' · ')}</div>` : ''}</td>
         <td class="n c pk" style="color:${bandColor}">${m.net}<div class="p-note" style="color:${bandColor}">${esc(BI(m.bandLabel, dl))}</div></td>
         <td>${dl !== 'en' ? esc(shortTa) : ''}${dl === 'bi' ? '<br/>' : ''}${dl !== 'ta' ? `<span style="color:#A1A1AA">${esc(shortEn)}</span>` : ''}</td>
       </tr>`;
@@ -457,7 +460,13 @@ async function generatePdf(
     document.body.appendChild(stage);
   }
   stage.innerHTML = '';
-  await (document as Document & { fonts: FontFaceSet }).fonts.ready;
+  const fs = (document as Document & { fonts: FontFaceSet }).fonts;
+  await Promise.all([
+    fs.load('400 16px "Noto Sans Tamil"'), fs.load('600 16px "Noto Sans Tamil"'), fs.load('700 16px "Noto Sans Tamil"'),
+    fs.load('400 16px "Plus Jakarta Sans"'), fs.load('600 16px "Plus Jakarta Sans"'), fs.load('700 16px "Plus Jakarta Sans"'),
+    fs.load('400 16px "JetBrains Mono"'), fs.load('500 16px "JetBrains Mono"'),
+  ]).catch(() => undefined);
+  await fs.ready;
 
   // measure each atom
   const meas = document.createElement('div');
@@ -475,7 +484,7 @@ async function generatePdf(
   let page: Atom[] = [];
   let used = 0;
   for (let i = 0; i < atoms.length; i++) {
-    const h = heights[i];
+    const h = heights[i] * 1.04 + 2;
     if (used + h > CAPACITY && page.length > 0) { packed.push(page); page = []; used = 0; }
     page.push(atoms[i]);
     used += h + 8;
@@ -503,9 +512,9 @@ async function generatePdf(
   for (let i = 0; i < pageEls.length; i++) {
     onProgress(`${i + 1} / ${pageEls.length}`);
     await new Promise((r) => requestAnimationFrame(r));
-    const canvas = await html2canvas(pageEls[i], { scale: 2, backgroundColor: '#ffffff', logging: false });
+    const canvas = await html2canvas(pageEls[i], { scale: 2.5, backgroundColor: '#ffffff', logging: false });
     if (i > 0) pdf.addPage();
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
   }
   const nameForFile = d.profile.name === DEFAULT_PROFILE_NAME
     ? 'Tamizh'

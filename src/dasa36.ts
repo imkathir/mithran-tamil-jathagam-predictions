@@ -4,7 +4,7 @@
 
 import type { Dossier, Bilingual, DasaPeriod, GrahaEval } from './engine';
 import {
-  ASPECT_SPEC, EXALT, DEBIL, OWN, MOOLATRIKONA, NATURAL_BENEFIC, NATURAL_MALEFIC,
+  EXALT, DEBIL, OWN, MOOLATRIKONA, NATURAL_BENEFIC, NATURAL_MALEFIC,
   NAK_LORDS, houseFrom, julianDayUTC, siderealLongitudes, lagnaSidereal,
   norm360,
 } from './engine';
@@ -151,28 +151,30 @@ const TRANSIT_IDS = ['Saturn', 'Jupiter', 'Rahu', 'Ketu', 'Mars', 'Sun', 'Venus'
 const SLOW_IDS = ['Saturn', 'Jupiter', 'Rahu', 'Ketu'] as const;
 
 const DT_AREAS: Record<number, Bilingual> = {
-  10: { ta: 'தொழில் (10)', en: 'Career (10th)' },
+  1: { ta: 'ஜென்மம் (1)', en: 'Self (1st)' },
   2: { ta: 'செல்வம் (2)', en: 'Wealth (2nd)' },
-  11: { ta: 'லாபம் (11)', en: 'Gains (11th)' },
+  3: { ta: 'சகோதரம் (3)', en: 'Courage/Siblings (3rd)' },
+  4: { ta: 'சுகம் (4)', en: 'Home/Comfort (4th)' },
+  5: { ta: 'புத்திரம் (5)', en: 'Learning/Children (5th)' },
   6: { ta: 'போட்டி/வெற்றி (6)', en: 'Competition/Victory (6th)' },
+  7: { ta: 'களத்திரம் (7)', en: 'Marriage/Partnership (7th)' },
+  8: { ta: 'ஆயுள்/மாற்றம் (8)', en: 'Change/Longevity (8th)' },
+  9: { ta: 'பாக்கியம் (9)', en: 'Fortune (9th)' },
+  10: { ta: 'தொழில் (10)', en: 'Career (10th)' },
+  11: { ta: 'லாபம் (11)', en: 'Gains (11th)' },
+  12: { ta: 'விரயம் (12)', en: 'Expense (12th)' },
 };
 
-// இரட்டைப் பெயர்ச்சி verification — classical aspect sets, exactly as specified:
-// Jupiter: 1st (occupation), 5th, 7th, 9th · Saturn: 1st (occupation), 3rd, 7th, 10th.
-const DT_ASPECTS: Record<string, number[]> = { Jupiter: [5, 7, 9], Saturn: [3, 7, 10] };
-
-// Transit planet at house `pHouse` (1-based from lagna) hits target house `tHouse` by occupation or aspect.
-function hits(pHouse: number, tHouse: number, planet: string): boolean {
-  if (pHouse === tHouse) return true; // 1st aspect = occupation
-  const counts = DT_ASPECTS[planet] ?? ASPECT_SPEC[planet]?.nums ?? [7];
-  for (const num of counts) {
-    const target = ((pHouse - 1 + num - 1) % 12) + 1;
-    if (target === tHouse) return true;
-  }
-  return false;
+// House coverage offsets from a transit planet's house (Janma-Rasi frame), per strict rule:
+// Jupiter covers +0 (occupation), +4 (5th), +6 (7th), +8 (9th) · Saturn covers +0, +2 (3rd), +6 (7th), +9 (10th).
+const DT_COVER: Record<string, number[]> = { Jupiter: [0, 4, 6, 8], Saturn: [0, 2, 6, 9] };
+function covers(pHouseFromMoon: number, house: number, planet: string): boolean {
+  const offs = DT_COVER[planet] ?? [0, 6];
+  return offs.includes(((house - pHouseFromMoon) % 12 + 12) % 12);
 }
 
-function gocharaSnap(d: Dossier, at: Date): GocharaSnap {
+
+export function gocharaSnap(d: Dossier, at: Date): GocharaSnap {
   const y = at.getUTCFullYear(), mo = at.getUTCMonth(), day = at.getUTCDate();
   const jd = jdLocal(y, mo, day, 6, 0, d.profile.timezoneOffsetMinutes);
   const jd2 = jdLocal(y, mo, day + 2, 6, 0, d.profile.timezoneOffsetMinutes);
@@ -199,11 +201,13 @@ function gocharaSnap(d: Dossier, at: Date): GocharaSnap {
   const saniGood = sat.fromMoon === 3 || sat.fromMoon === 6 || sat.fromMoon === 11;
   const guruBala = jup.fromMoon === 2 || jup.fromMoon === 5 || jup.fromMoon === 7 || jup.fromMoon === 9 || jup.fromMoon === 11;
 
+  // இரட்டைப் பெயர்ச்சி: house H (1–12, from Janma Rasi) ONLY when BOTH transit Jupiter
+  // (covers +0,+4,+6,+8) AND transit Saturn (covers +0,+2,+6,+9) hit H simultaneously.
   const doubleTransit: { house: number; area: Bilingual }[] = [];
-  for (const tHouse of [10, 2, 11, 6]) {
-    const satHit = hits(sat.fromLagna, tHouse, 'Saturn');
-    const jupHit = hits(jup.fromLagna, tHouse, 'Jupiter');
-    if (satHit && jupHit) doubleTransit.push({ house: tHouse, area: DT_AREAS[tHouse] });
+  for (let tHouse = 1; tHouse <= 12; tHouse++) {
+    if (covers(jup.fromMoon, tHouse, 'Jupiter') && covers(sat.fromMoon, tHouse, 'Saturn')) {
+      doubleTransit.push({ house: tHouse, area: DT_AREAS[tHouse] });
+    }
   }
 
   let score = 50;
@@ -217,7 +221,7 @@ function gocharaSnap(d: Dossier, at: Date): GocharaSnap {
   if (ketu.fromMoon === 6 || ketu.fromMoon === 10 || ketu.fromMoon === 11) score += 3;
   else if (ketu.fromMoon === 1 || ketu.fromMoon === 5 || ketu.fromMoon === 9) score -= 5;
   let dtScore = 0;
-  for (const dt of doubleTransit) dtScore += dt.house === 10 ? 7 : dt.house === 6 ? 6 : 7;
+  for (const dt of doubleTransit) dtScore += dt.house === 10 ? 7 : dt.house === 6 ? 6 : (dt.house === 2 || dt.house === 11) ? 7 : 4;
   score += Math.min(12, dtScore);
   if (mars.fromMoon === 1 || mars.fromMoon === 4 || mars.fromMoon === 8) score -= 3;
   else if (mars.fromMoon === 3 || mars.fromMoon === 6 || mars.fromMoon === 11) score += 3;
@@ -240,15 +244,11 @@ function monthFlags(s1: GocharaSnap, s2: GocharaSnap, rahuKetuShift: boolean): M
   const flags: MonthEntry['gocharaFlags'] = [];
   if (s1.sadeSati || s2.sadeSati) flags.push({ key: 'sadeSati', label: { ta: 'ஏழரைச் சனி', en: 'Sade Sati' }, good: false });
   if (s1.ashtamaSani || s2.ashtamaSani) flags.push({ key: 'ashtamaSani', label: { ta: 'அஷ்டம சனி', en: 'Ashtama Sani' }, good: false });
-  if (s1.guruBala || s2.guruBala) flags.push({ key: 'guruBala', label: { ta: 'குரு பலம்', en: 'Guru Balam' }, good: true });
+  if (s1.guruBala) flags.push({ key: 'guruBala', label: { ta: 'குரு பலம்', en: 'Guru Balam' }, good: true });
   if (s1.saniGood && s2.saniGood) flags.push({ key: 'saniGood', label: { ta: 'சனி 3/6/11 — சாதகம்', en: 'Saturn 3/6/11 — favorable' }, good: true });
-  const dtSeen = new Set<number>();
-  for (const snap of [s1, s2]) {
-    for (const dt of snap.doubleTransit) {
-      if (dtSeen.has(dt.house)) continue;
-      dtSeen.add(dt.house);
-      flags.push({ key: `dt${dt.house}`, label: { ta: `இரட்டைப் பெயர்ச்சி ${dt.area.ta}`, en: `Double Transit ${dt.area.en}` }, good: true });
-    }
+  // Tags reflect the month-start snapshot exactly (same house frame the summary line displays).
+  for (const dt of s1.doubleTransit) {
+    flags.push({ key: `dt${dt.house}`, label: { ta: `இரட்டைப் பெயர்ச்சி ${dt.area.ta}`, en: `Double Transit ${dt.area.en}` }, good: true });
   }
   if (rahuKetuShift) flags.push({ key: 'rahuKetu', label: { ta: 'ராகு-கேது பெயர்ச்சி', en: 'Rahu-Ketu shift' }, good: false });
   return flags;
@@ -278,15 +278,17 @@ const PLANET_TA: Record<string, string> = { Saturn: 'சனி', Jupiter: 'க�
 const PLANET_EN: Record<string, string> = { Saturn: 'Saturn', Jupiter: 'Jupiter', Rahu: 'Rahu', Ketu: 'Ketu', Mars: 'Mars', Sun: 'Sun', Venus: 'Venus', Mercury: 'Mercury' };
 
 // ---------- prediction synthesis (rule-based, bilingual) ----------
-function buildPrediction(p: { dasaScore: number; band: Band; sadeSati: boolean; ashtamaSani: boolean; guruBala: boolean; doubleTransit: { house: number; area: Bilingual }[] }): Bilingual {
+function buildPrediction(p: { net: number; dasaScore: number; band: Band; sadeSati: boolean; ashtamaSani: boolean; guruBala: boolean; doubleTransit: { house: number; area: Bilingual }[] }): Bilingual {
   const dt = (h: number) => p.doubleTransit.some((x) => x.house === h);
   const ta: string[] = [];
   const en: string[] = [];
 
-  if (p.dasaScore >= 65) {
+  // Narrative tier follows the NET score band exactly: >=60 (முன்னேற்றம் & லாபம்) is always the
+  // positive growth narrative; 40-59 the moderate one; below 40 the careful one.
+  if (p.net >= 60) {
     ta.push('தசா-புக்தி-அந்தர அதிபதிகள் வலுவான நிலையில் இருப்பதால், தொழில் முன்னேற்றமும் புதிய வாய்ப்புகளும் இயல்பாக அமையும்.');
     en.push('The Dasa-Bhukti-Antara lords hold strong natal dignity this month, so career progress and new opportunities come naturally.');
-  } else if (p.dasaScore >= 45) {
+  } else if (p.net >= 40) {
     ta.push('தசா ஓட்டம் சீராக உள்ளது — உழைப்புக்கேற்ற பலன் கிடைக்கும்; முக்கிய முடிவுகளில் பொறுமை பலன் தரும்.');
     en.push('The dasa flow is steady — effort will be rewarded; patience pays off in important decisions.');
   } else {
@@ -396,12 +398,12 @@ export function buildDasa36(d: Dossier, now: Date): Dasa36 {
       band, bandLabel: BAND_LABEL[band],
       sadeSati: s1.sadeSati || s2.sadeSati,
       ashtamaSani: s1.ashtamaSani || s2.ashtamaSani,
-      guruBala: s1.guruBala || s2.guruBala,
+      guruBala: s1.guruBala,
       rahuKetuShift,
-      doubleTransit: s1.doubleTransit.length ? s1.doubleTransit : s2.doubleTransit,
+      doubleTransit: s1.doubleTransit,
       gocharaFlags: flags,
       transitSummary: transitSummaryOf(s1),
-      prediction: buildPrediction({ dasaScore, band, sadeSati: s1.sadeSati || s2.sadeSati, ashtamaSani: s1.ashtamaSani || s2.ashtamaSani, guruBala: s1.guruBala || s2.guruBala, doubleTransit: s1.doubleTransit.length ? s1.doubleTransit : s2.doubleTransit }),
+      prediction: buildPrediction({ net, dasaScore, band, sadeSati: s1.sadeSati || s2.sadeSati, ashtamaSani: s1.ashtamaSani || s2.ashtamaSani, guruBala: s1.guruBala, doubleTransit: s1.doubleTransit }),
     };
     months.push(entry);
   }

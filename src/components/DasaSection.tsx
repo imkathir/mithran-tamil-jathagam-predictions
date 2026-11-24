@@ -145,7 +145,7 @@ export default function DasaSection({ d, onGoTimeline }: { d: Dossier; onGoTimel
               <div className="m36-dasa mono">{lordLine(m)}</div>
 
               <div className="m36-gochara">
-                <span className="mono m36-transit">{pick(m.transitSummary, lang)}</span>
+                <span className="mono m36-transit"><bdi>{pick(m.transitSummary, lang)}</bdi></span>
                 {m.gocharaFlags.map((f) => (
                   <span key={f.key} className={`m36-flag${f.good ? ' good' : ' bad'}`}>{pick(f.label, lang)}</span>
                 ))}

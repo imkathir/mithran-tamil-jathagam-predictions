@@ -520,7 +520,9 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 }
 .m36-bar-wrap { width: 100%; height: 58px; display: flex; align-items: flex-end; justify-content: center; }
 .m36-bar { width: 72%; border-radius: 1px 1px 0 0; transition: height 0.2s; }
-.m36-lab { font-family: var(--mono); font-size: 7px; color: var(--faint); letter-spacing: -0.02em; white-space: nowrap; }
+.m36-lab { font-family: 'JetBrains Mono', 'Noto Sans Tamil', monospace; font-size: 7px; color: var(--faint); letter-spacing: 0; white-space: nowrap; }
+.m36-transit { overflow: visible; text-overflow: clip; unicode-bidi: isolate; }
+.m36-transit bdi { unicode-bidi: isolate; }
 .m36-cell:hover .m36-bar { filter: brightness(1.25); }
 .m36-cell:hover .m36-lab { color: var(--foreground); }
 .m36-cell.now .m36-bar { outline: 2px solid var(--primary); outline-offset: 1px; }

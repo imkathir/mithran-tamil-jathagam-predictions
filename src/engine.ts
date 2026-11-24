@@ -234,6 +234,9 @@ const BAV_TABLE: Record<string, Record<string, number[]>> = {
   Saturn: { Sun: [1, 2, 4, 7, 8, 10, 11], Moon: [3, 6, 11], Mars: [3, 5, 6, 10, 11, 12], Mercury: [6, 8, 9, 10, 11, 12], Jupiter: [5, 6, 11, 12], Venus: [6, 11, 12], Saturn: [3, 5, 6, 11], Lagna: [1, 3, 4, 6, 10, 11] },
 };
 
+const D9_SHORT_TA: Record<string, string> = { exalt: 'உச்சம்', own: 'ஆட்சி', mt: 'மூலதிரிகோணம்', debil: 'நீசம்', friend: 'நட்பு', enemy: 'பகை', neutral: 'சமம்' };
+const d9ShortTa = (key: string) => D9_SHORT_TA[key] ?? key;
+
 function dignityOf(id: string, rasi: number): { key: string; ta: string; en: string } {
   if (OWN[id]?.includes(rasi)) return { key: 'own', ta: 'ஆட்சி (சொந்த வீடு)', en: 'Own sign (Swakshetra)' };
   if (EXALT[id] === rasi) return { key: 'exalt', ta: 'உச்சம்', en: 'Exalted (Uchcha)' };
@@ -374,11 +377,11 @@ interface DomainDef {
   karakas: string[]; useD10: boolean;
 }
 const DOMAIN_DEFS: DomainDef[] = [
-  { key: 'career', title: { ta: 'தொழில் & மென்பொருள்', en: 'Career & IT' }, primaryHouse: 10, auxHouses: [1, 6], karakas: ['Sun', 'Mercury', 'Saturn', 'Jupiter'], useD10: true },
-  { key: 'business', title: { ta: 'வியாபாரம் & விவசாயம்', en: 'Business & Agriculture' }, primaryHouse: 7, auxHouses: [10, 2], karakas: ['Mercury', 'Venus', 'Jupiter'], useD10: true },
-  { key: 'wealth', title: { ta: 'தனம்', en: 'Wealth' }, primaryHouse: 2, auxHouses: [11, 9], karakas: ['Jupiter', 'Venus', 'Mercury'], useD10: false },
-  { key: 'family', title: { ta: 'குடும்பம் & திருமணம்', en: 'Family & Marriage' }, primaryHouse: 7, auxHouses: [4, 2], karakas: ['Venus', 'Jupiter', 'Moon'], useD10: false },
-  { key: 'health', title: { ta: 'ஆரோக்கியம்', en: 'Health' }, primaryHouse: 1, auxHouses: [6], karakas: ['Sun', 'Moon', 'Mars'], useD10: false },
+  { key: 'career', title: { ta: 'தொழில் & மென்பொருள் (Career & IT)', en: 'Career & IT' }, primaryHouse: 10, auxHouses: [1, 6], karakas: ['Sun', 'Mercury', 'Saturn', 'Jupiter'], useD10: true },
+  { key: 'business', title: { ta: 'வியாபாரம் & விவசாயம் (Business & Agriculture)', en: 'Business & Agriculture' }, primaryHouse: 7, auxHouses: [10, 2], karakas: ['Mercury', 'Venus', 'Jupiter'], useD10: true },
+  { key: 'wealth', title: { ta: 'செல்வம் & நிதி (Wealth & Finance)', en: 'Wealth & Finance' }, primaryHouse: 2, auxHouses: [11, 9], karakas: ['Jupiter', 'Venus', 'Mercury'], useD10: false },
+  { key: 'family', title: { ta: 'குடும்பம் & திருமணம் (Family & Marriage)', en: 'Family & Marriage' }, primaryHouse: 7, auxHouses: [4, 2], karakas: ['Venus', 'Jupiter', 'Moon'], useD10: false },
+  { key: 'health', title: { ta: 'ஆரோக்கியம் (Health)', en: 'Health' }, primaryHouse: 1, auxHouses: [6], karakas: ['Sun', 'Moon', 'Mars'], useD10: false },
 ];
 
 function synthesizeDomain(def: DomainDef, ctx: {
@@ -391,7 +394,7 @@ function synthesizeDomain(def: DomainDef, ctx: {
   const lordId = RASI_LORDS[primaryRasi];
   const lord = byId[lordId];
   const houseClassEn = [1, 4, 7, 10].includes(def.primaryHouse) ? 'Kendra' : [5, 9].includes(def.primaryHouse) ? 'Trikona' : [3, 6, 10, 11].includes(def.primaryHouse) ? 'Upachaya' : [6, 8, 12].includes(def.primaryHouse) ? 'Dusthana' : def.primaryHouse === 2 || def.primaryHouse === 7 ? 'Maraka (Panapara)' : 'Neutral';
-  const houseClassTa = [1, 4, 7, 10].includes(def.primaryHouse) ? 'கேந்திரம்' : [5, 9].includes(def.primaryHouse) ? 'திரிகோணம்' : [3, 6, 10, 11].includes(def.primaryHouse) ? 'உபசயம்' : [6, 8, 12].includes(def.primaryHouse) ? 'துஷ்டானம்' : def.primaryHouse === 2 || def.primaryHouse === 7 ? 'மாரகம் (பானாபாரம்)' : 'நடுநிலை';
+  const houseClassTa = [1, 4, 7, 10].includes(def.primaryHouse) ? 'கேந்திரம்' : [5, 9].includes(def.primaryHouse) ? 'திரிகோணம்' : [3, 6, 10, 11].includes(def.primaryHouse) ? 'உபசயம்' : [6, 8, 12].includes(def.primaryHouse) ? 'துஷ்டானம்' : def.primaryHouse === 2 || def.primaryHouse === 7 ? 'மாரகம் (பனாபரம்)' : 'நடுநிலை';
   const ledger: LedgerRow[] = [];
   let score = 0;
   const add = (ta: string, en: string, vta: string, ven: string, sign: 1 | 0 | -1, w = 3) => {
@@ -400,7 +403,7 @@ function synthesizeDomain(def: DomainDef, ctx: {
   };
 
   // 1. Bhava & Bhavadhipathi
-  const lordHouseClass = [1, 4, 7, 10].includes(lord.house) ? 'கேந்திரம்' : [5, 9].includes(lord.house) ? 'திரிகோணம்' : [6, 8, 12].includes(lord.house) ? 'துஷ்டானம்' : lord.house === 2 || lord.house === 7 ? 'மாரகம் (பானாபாரம்)' : [3, 10, 11].includes(lord.house) ? 'உபசயம்' : 'நடுநிலை';
+  const lordHouseClass = [1, 4, 7, 10].includes(lord.house) ? 'கேந்திரம்' : [5, 9].includes(lord.house) ? 'திரிகோணம்' : [6, 8, 12].includes(lord.house) ? 'துஷ்டானம்' : lord.house === 2 || lord.house === 7 ? 'மாரகம் (பனாபரம்)' : [3, 10, 11].includes(lord.house) ? 'உபசயம்' : 'நடுநிலை';
   const lordHouseClassEn = [1, 4, 7, 10].includes(lord.house) ? 'Kendra' : [5, 9].includes(lord.house) ? 'Trikona' : [6, 8, 12].includes(lord.house) ? 'Dusthana' : lord.house === 2 || lord.house === 7 ? 'Maraka (Panapara)' : [3, 10, 11].includes(lord.house) ? 'Upachaya' : 'Neutral';
   const lSign = [1, 4, 7, 10].includes(lord.house) || [5, 9].includes(lord.house) ? 1 : [6, 8, 12].includes(lord.house) ? -1 : 0;
   add('பாவ & பாவாதிபதி', 'Bhava & Bhavadhipathi',
@@ -451,7 +454,7 @@ function synthesizeDomain(def: DomainDef, ctx: {
   // 8. D9 dignity
   const d9d = dignityOf(lordId, lord.d9);
   const d9Sign: 1 | 0 | -1 = d9d.key === 'exalt' || d9d.key === 'own' ? 1 : d9d.key === 'debil' ? -1 : 0;
-  add('D9 நவாம்ச பலம் (தனிப் பார்வை)', 'D9 Navamsa strength (separate from D1)', `${RASI[lord.d9].ta} · ${d9d.ta}`, `${RASI[lord.d9].en} · ${d9d.en}`, d9Sign, 2);
+  add('D9 நவாம்ச பலம் (தனிப் பார்வை)', 'D9 Navamsa strength (separate from D1)', `${RASI[lord.d9].ta} · (நவாம்சத்தில் ${d9ShortTa(d9d.key)})`, `${RASI[lord.d9].en} · (${d9d.en} in Navamsa)`, d9Sign, 2);
 
   // 9. D10 (career/business)
   if (def.useD10) {
