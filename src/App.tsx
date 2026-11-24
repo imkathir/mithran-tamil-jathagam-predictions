@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { computeDossier, type BirthProfile, type Dossier, type PanchangamMode } from './engine';
-import { LangCtx, STRINGS, useT, pick, type Lang } from './i18n';
+import { LangCtx, STRINGS, useT, pick, profileName, DEFAULT_PROFILE_NAME, type Lang } from './i18n';
 import ChartPair from './components/ChartPair';
 import GrahaInspector from './components/GrahaInspector';
 import StrengthPanel from './components/StrengthPanel';
@@ -23,14 +23,14 @@ const NAV_ITEMS = [
 ] as const satisfies readonly (readonly [SectionKey, 'navChart' | 'navStrength' | 'navDasa' | 'navTimeline' | 'navPorutham' | 'navReference' | 'navPredict'])[];
 
 const INITIAL: BirthProfile & { transitDate: string } = {
-  name: 'Suresh Kumar',
-  date: '2007-08-22',
-  time: '11:06',
+  name: DEFAULT_PROFILE_NAME,
+  date: '2025-07-09',
+  time: '17:25',
   placeName: 'Udumalpet, Tamil Nadu',
   latitude: 10.5881,
   longitude: 77.2478,
   timezoneOffsetMinutes: 330,
-  panchangamMode: 'THIRUKANITHAM',
+  panchangamMode: 'VAKYA',
   transitDate: today(),
 };
 
@@ -44,7 +44,7 @@ function Rail({ form, setForm, onCalc, onReset, lang }: {
     <div className="rail">
       <div className="field">
         <label>{t('name')}</label>
-        <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input value={profileName(form.name, lang)} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         <div className="row2" style={{ marginTop: 10 }}>
           <div className="field">
             <label>{t('dob')}</label>

@@ -4,6 +4,13 @@ import type { Bilingual } from './engine';
 
 export type Lang = 'ta' | 'en';
 
+/** Default birth-profile name: displays as தமிழ் in Tamil, Tamizh in English. */
+export const DEFAULT_PROFILE_NAME = 'தமிழ்';
+export function profileName(name: string, lang: 'ta' | 'en' | 'bi'): string {
+  if (name !== DEFAULT_PROFILE_NAME) return name;
+  return lang === 'ta' ? 'தமிழ்' : lang === 'en' ? 'Tamizh' : 'தமிழ் / Tamizh';
+}
+
 export const STRINGS: Record<string, Bilingual> = {
   wordmark: { ta: 'மித்ரன் ஜோதிடம்', en: 'Mithran Predictions' },
   wordmarkSub: { ta: 'தென்னிந்திய ஜோதிட பணிமனை', en: 'South Indian Jothidam Workbench' },

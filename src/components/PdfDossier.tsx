@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import type { Dossier, Bilingual } from '../engine';
-import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, norm360, fmtDate } from '../engine';
+import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, fmtDate } from '../engine';
 import type { TimelineRow } from '../timeline';
 import type { PoruthamResult } from '../porutham';
+import { buildDasa36 } from '../dasa36';
 import {
   RASI_REF, NAKSHATRA_REF, BHAVA_REF, DASA_YEARS, PLANET_NAMES,
 } from '../data/jothidam-reference-data';
-import type { Lang } from '../i18n';
+import { DEFAULT_PROFILE_NAME, profileName, type Lang } from '../i18n';
 
 export interface PdfPoruthamData { bride: string; groom: string; result: PoruthamResult }
 
@@ -23,65 +24,21 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 interface Atom { html: string }
 
 const SECTIONS = [
-  { id: 1, ta: 'பிறப்பு விவரம் & பஞ்சாங்கச் சுருக்கம்', en: 'Birth Profile & Panchangam Summary' },
-  { id: 2, ta: 'ராசி (D1) & நவாம்சம் (D9) கட்டங்கள்', en: 'Rasi (D1) & Navamsa (D9) Charts with Dignity Badges' },
-  { id: 3, ta: 'நவகிரக அட்டவணை & பார்வை மேட்ரிக்ஸ்', en: '9-Graha Ephemeris & Paarvai Matrix' },
-  { id: 4, ta: '40-காரணி கிரக ஆய்வு × 9', en: '40-Factor Graha Inspector × 9' },
-  { id: 5, ta: 'பலம் · யோகங்கள் · SAV', en: 'Strength · Yogas · SAV (Pass-2, Bhava Bala, 337-bindu SAV)' },
-  { id: 6, ta: 'இன்றைய கோச்சாரம்', en: 'Live Gochara (Sade Sati · Ashtama Sani · Guru Bala · Rahu-Ketu)' },
-  { id: 7, ta: 'ஐந்து துறை பலன்கள்', en: 'Five-Domain Predictions with Rule Citations' },
-  { id: 8, ta: '0–70 வயது தசா-புக்திகாலக்கோடு', en: 'Birth–70yr Dasa-Bhukti Timeline' },
-  { id: 9, ta: 'திருமணப் பொருத்தம் & 20-ஆண்டு நிலைத்தன்மை', en: 'Marriage Porutham & 20-Year Stability' },
-  { id: 10, ta: 'ஜோதிட அடிப்படை இணைப்பு', en: 'Jothidam Reference Appendix' },
+  { id: 1, ta: 'தென்னிந்திய ராசி & நவாம்ச கட்டங்கள்', en: 'South Indian 4x4 Charts — Rasi & Navamsa' },
+  { id: 2, ta: 'அடுத்த 36 மாத தசாபுத்தி & கோச்சார பலன்கள்', en: 'Next 36 Months Combined Dasa-Bhukti & Gochara Prediction' },
+  { id: 3, ta: 'பிறப்பு முதல் 70 வயது தசாபுத்தி பலன்கள்', en: 'Birth to 70 Years Dasa-Bhukti Life Prediction' },
+  { id: 4, ta: 'கிரக நிலைகள் & பார்வை அட்டவணை', en: '9-Graha Ephemeris & Planetary Paarvai Matrix' },
+  { id: 5, ta: '40 காரணிகள் நுண்ணாய்வு', en: '40-Factor Classical Graha Inspector' },
+  { id: 6, ta: 'பலம், யோகங்கள் & சர்வாஷ்டகவர்க்கம்', en: 'Strength, Yogas & Sarvashtakavarga' },
+  { id: 7, ta: 'ஐந்து துறை வாழ்க்கை பலன்கள்', en: 'Five-Domain Classical Predictions' },
+  { id: 8, ta: 'திருமணப் பொருத்தம் & 20 ஆண்டு ஆய்வு', en: 'Marriage Compatibility & 20-Year Stability Report' },
+  { id: 9, ta: 'ஜோதிட அடிப்படை வழிகாட்டி', en: 'Jothidam Reference Guide Appendix' },
 ];
 
-const PRESETS: { key: string; ta: string; en: string; ids: number[] }[] = [
-  { key: 'full', ta: 'முழு ஜாதகக் குறிப்பு', en: 'Full Dossier', ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
-  { key: 'charts', ta: 'சுற்றுமுகங்கள் & சுற்றுமுகஅட்டவணை', en: 'Charts & Ephemeris Only', ids: [2, 3] },
-  { key: 'dasa', ta: '70-ஆண்டு தசா அறிக்கை', en: '70-Year Dasa Report', ids: [1, 8] },
-  { key: 'porutham', ta: 'திருமணப் பொருத்த அறிக்கை', en: 'Marriage Porutham Report', ids: [9] },
-];
+/** Sections 1-3 are the core trio checked by default; the rest are opt-in. */
+const DEFAULT_SECTION_IDS = [1, 2, 3];
 
 // ---------- panchangam helpers (tithi / yoga / karana from Sun–Moon longitudes) ----------
-const TITHI_N = [
-  ['பிரதமை', 'Prathama'], ['துவிதியை', 'Dwitiya'], ['திரிதியை', 'Tritiya'], ['சதுர்த்தி', 'Chaturthi'], ['பஞ்சமி', 'Panchami'],
-  ['சஷ்டி', 'Shashthi'], ['சப்தமி', 'Saptami'], ['அஷ்டமி', 'Ashtami'], ['நவமி', 'Navami'], ['தசமி', 'Dashami'],
-  ['ஏகாதசி', 'Ekadashi'], ['துவாதசி', 'Dwadashi'], ['திரயோதசி', 'Trayodashi'], ['சதுர்த்தசி', 'Chaturdashi'], ['பௌர்ணமி', 'Purnima'],
-  ['பிரதமை', 'Prathama'], ['துவிதியை', 'Dwitiya'], ['திரிதியை', 'Tritiya'], ['சதுர்த்தி', 'Chaturthi'], ['பஞ்சமி', 'Panchami'],
-  ['சஷ்டி', 'Shashthi'], ['சப்தமி', 'Saptami'], ['அஷ்டமி', 'Ashtami'], ['நவமி', 'Navami'], ['தசமி', 'Dashami'],
-  ['ஏகாதசி', 'Ekadashi'], ['துவாதசி', 'Dwadashi'], ['திரயோதசி', 'Trayodashi'], ['சதுர்த்தசி', 'Chaturdashi'], ['அமாவாசை', 'Amavasya'],
-];
-const YOGA_N = [
-  ['விஷ்கம்பம்', 'Vishkambha'], ['பிரீதி', 'Priti'], ['ஆயுஷ்மான்', 'Ayushman'], ['சௌபாக்கியம்', 'Saubhagya'], ['சோபனம்', 'Shobhana'],
-  ['அதிகண்டம்', 'Atiganda'], ['சுகர்மா', 'Sukarma'], ['திருதி', 'Dhriti'], ['சூலம்', 'Shula'], ['கண்டம்', 'Ganda'],
-  ['விருத்தி', 'Vriddhi'], ['துருவம்', 'Dhruva'], ['வியாகாதம்', 'Vyaghata'], ['ஹர்ஷணம்', 'Harshana'], ['வஜ்ரம்', 'Vajra'],
-  ['சித்தி', 'Siddhi'], ['வியதீபாதம்', 'Vyatipata'], ['வரியான்', 'Variyana'], ['பரிகம்', 'Parigha'], ['சிவம்', 'Shiva'],
-  ['சித்தம்', 'Siddha'], ['சாத்தியம்', 'Sadhya'], ['சுபம்', 'Shubha'], ['சுக்கிரம்', 'Shukla'], ['பிரம்மம்', 'Brahma'],
-  ['ஐந்திரம்', 'Indra'], ['வைதிருதி', 'Vaidhriti'],
-];
-const KARANA_M = [['பவம்', 'Bava'], ['பாலவம்', 'Balava'], ['கௌலவம்', 'Kaulava'], ['தைதுலம்', 'Taitila'], ['கரம்', 'Gara'], ['வணிஜம்', 'Vanija'], ['விஷ்டி', 'Vishti']];
-
-function panchangam(d: Dossier, dl: DocLang) {
-  const sun = d.grahas.find((g) => g.id === 'Sun')!;
-  const moon = d.grahas.find((g) => g.id === 'Moon')!;
-  const diff = norm360(moon.lon - sun.lon);
-  const tIdx = Math.floor(diff / 12);
-  const yIdx = Math.floor(norm360(sun.lon + moon.lon) / (360 / 27));
-  const kIdx = Math.floor(diff / 6) % 60;
-  const karana = kIdx === 0 ? ['கிம்ஸ்துக்னம்', 'Kimstughna']
-    : kIdx >= 57 ? [['சகுனி', 'Shakuni'], ['சதுஷ்பாதம்', 'Chatushpada'], ['நாகம்', 'Naga']][kIdx - 57]
-    : KARANA_M[(kIdx - 1) % 7];
-  return {
-    tithi: L(TITHI_N[tIdx][0], TITHI_N[tIdx][1], dl),
-    yoga: L(YOGA_N[yIdx][0], YOGA_N[yIdx][1], dl),
-    karana: L(karana[0], karana[1], dl),
-  };
-}
-
-function paksha(diff: number, dl: DocLang) {
-  return diff < 180 ? L('சுக்ல பட்சம்', 'Shukla Paksha', dl) : L('கிருஷ்ண பட்சம்', 'Krishna Paksha', dl);
-}
-
 function badgeFor(planet: string, rasi: number): string {
   if ((OWN[planet] ?? []).includes(rasi)) return 'ஆ';
   if (EXALT[planet] === rasi) return 'உ';
@@ -134,50 +91,6 @@ const PDF_CSS = `
 
 // ---------- section builders ----------
 
-export function section1(d: Dossier, dl: DocLang, generated: string): Atom[] {
-  const p = d.profile;
-  const moon = d.grahas.find((g) => g.id === 'Moon')!;
-  const pan = panchangam(d, dl);
-  const diff = norm360(moon.lon - d.grahas.find((g) => g.id === 'Sun')!.lon);
-  const kv = (k: string, v: string) => `<div class="p-kv"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`;
-  const html = `
-    <div class="p-h1">${esc(p.name)}</div>
-    <div class="p-sub">${L('ஜாதகக் குறிப்பு பதிவு — மித்ரன் பிரிடிக்ஷன்ஸ்', 'Jathagam Dossier — Mithran Predictions', dl)} · ${generated}</div>
-    <div class="p-h2">${L('1. பிறப்பு விவரம் & பஞ்சாங்கச் சுருக்கம்', '1. Birth Profile & Panchangam Summary', dl)}</div>
-    <div class="p-grid2">
-      <div>
-        ${kv(L('பெயர்', 'Name', dl), p.name)}
-        ${kv(L('பிறந்த தேதி', 'Date of Birth', dl), p.date)}
-        ${kv(L('பிறந்த நேரம்', 'Time of Birth', dl), p.time)}
-        ${kv(L('பிறந்த இடம்', 'Place', dl), p.placeName)}
-        ${kv(L('அட்சரேகை / தீர்க்கரேகை', 'Latitude / Longitude', dl), `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`)}
-        ${kv(L('நேர வலயம்', 'Time Zone', dl), `UTC${p.timezoneOffsetMinutes >= 0 ? '+' : ''}${p.timezoneOffsetMinutes / 60}`)}
-      </div>
-      <div>
-        ${kv(L('பஞ்சாங்க முறை', 'Panchangam Mode', dl), p.panchangamMode)}
-        ${kv(L('கணக்கீட்டு நாள் (கோச்சாரம்)', 'Transit Date', dl), d.gochara.date)}
-        ${kv(L('அயனாம்சம் (லஹிரி)', 'Ayanamsa (Lahiri)', dl), `${d.ayanamsa.toFixed(4)}°`)}
-        ${kv(L('லக்னம்', 'Lagna', dl), `${rasiName(d.lagnaRasi, dl)} · ${degMin(d.lagnaLon % 30)} · ${nakName(d.lagnaNak.idx, dl)} ${L(`${d.lagnaNak.pada}-ம் பாதம்`, `Pada ${d.lagnaNak.pada}`, dl)}`)}
-        ${kv(L('சந்திர ராசி', 'Moon Rasi', dl), `${rasiName(moon.rasi, dl)} · ${degMin(moon.deg)}`)}
-        ${kv(L('நட்சத்திரம்', 'Birth Star', dl), `${nakName(moon.nakIdx, dl)} · ${L(`${moon.pada}-ம் பாதம்`, `Pada ${moon.pada}`, dl)} · ${L('அதிபதி', 'Lord', dl)} ${pn(NAKSHATRA_REF[moon.nakIdx].lord, dl)}`)}
-      </div>
-    </div>
-    <div class="p-h3">${L('பஞ்சாங்கம் (சூரியன் – சந்திரன் கணக்கீடு)', 'Panchangam (computed from Sun–Moon longitudes)', dl)}</div>
-    <div class="p-grid2">
-      <div>
-        ${kv(L('திதி', 'Tithi', dl), `${pan.tithi} · ${paksha(diff, dl)}`)}
-        ${kv(L('நட்சத்திரம்', 'Nakshatra', dl), `${nakName(moon.nakIdx, dl)} (${L(`${moon.pada}-ம் பாதம்`, `Pada ${moon.pada}`, dl)})`)}
-      </div>
-      <div>
-        ${kv(L('யோகம்', 'Yoga', dl), pan.yoga)}
-        ${kv(L('கரணம்', 'Karana', dl), pan.karana)}
-      </div>
-    </div>
-    <div class="p-note">${L('குறிப்பு: திதி/யோகம்/கரணம் சூரிய–சந்திர தூரத்திலிருந்து நிலையான விதிகளால் கணக்கிடப்படுகின்றன. அனைத்து கிரக நிலைகளும் ஸிடீரியல் (லஹிரி) முறை.', 'Note: Tithi/Yoga/Karana are computed deterministically from the Sun–Moon elongation. All planetary positions are sidereal (Lahiri).', dl)}</div>
-  `;
-  return [{ html }];
-}
-
 function siTable(grid: Record<number, string[]>, lagnaRasi: number, label: string): string {
   const cells: string[] = [];
   for (let row = 0; row < 4; row++) {
@@ -205,18 +118,69 @@ const GRID: Record<number, [number, number]> = {
   8: [3, 0], 7: [3, 1], 6: [3, 2], 5: [3, 3],
 };
 
-export function section2(d: Dossier, dl: DocLang): Atom[] {
+export function sectionCharts(d: Dossier, dl: DocLang): Atom[] {
+  const p = d.profile;
+  const moon = d.grahas.find((g) => g.id === 'Moon')!;
+  const kv = (k: string, v: string) => `<div class="p-kv"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`;
   const html = `
-    <div class="p-h2">${L('2. ராசி (D1) & நவாம்சம் (D9) கட்டங்கள்', '2. Rasi (D1) & Navamsa (D9) Charts', dl)}</div>
+    <div class="p-h2">${L('1. தென்னிந்திய ராசி & நவாம்ச கட்டங்கள்', '1. South Indian 4x4 Charts — Rasi & Navamsa', dl)}</div>
+    <div class="p-grid2">
+      <div>
+        ${kv(L('பெயர்', 'Name', dl), profileName(p.name, dl))}
+        ${kv(L('பிறந்த தேதி', 'Date of Birth', dl), p.date)}
+        ${kv(L('பிறந்த நேரம்', 'Time of Birth', dl), p.time)}
+        ${kv(L('பிறந்த இடம்', 'Place', dl), p.placeName)}
+      </div>
+      <div>
+        ${kv(L('லக்னம்', 'Lagna', dl), `${rasiName(d.lagnaRasi, dl)} ${degMin(d.lagnaLon % 30)}`)}
+        ${kv(L('ராசி (சந்திரன்)', 'Rasi (Moon)', dl), rasiName(moon.rasi, dl))}
+        ${kv(L('நட்சத்திரம்', 'Star', dl), `${nakName(moon.nakIdx, dl)} · ${L(`${moon.pada}-ம் பாதம்`, `Pada ${moon.pada}`, dl)}`)}
+      </div>
+    </div>
     <div class="p-sub">${L('தென்னிந்திய 4×4 அமைப்பு · ஆட்சி (ஆ) · உச்சம் (உ) · நீச்சம் (நீ) பேட்ஜ்கள் · கருப்பு எல்லை = லக்னம்', 'South Indian 4×4 format · dignity badges: own (ஆ), exalt (உ), debil (நீ) · heavy border = Lagna', dl)}</div>
     ${siTable(d.rasiGrid, d.lagnaRasi, L('ராசி குண்டலி (D1)', 'Rasi Chart (D1)', dl))}
-    ${siTable(d.navamsaGrid, d.grahas.find((g) => g.id === 'Moon')!.d9, L('நவாம்ச குண்டலி (D9)', 'Navamsa Chart (D9)', dl))}
-    <div class="p-note">${L('நவாம்சத்தில் லக்னம்: சந்திரனின் நவாம்ச ராசி காட்டப்பட்டுள்ளது (பொதுவான பாரம்பரிய குறியீடு).', 'Navamsa marker shows the navamsa sign of the Moon (common traditional notation).', dl)}</div>
+    ${siTable(d.navamsaGrid, moon.d9, L('நவாம்ச குண்டலி (D9)', 'Navamsa Chart (D9)', dl))}
+    <div class="p-note">${L('நவாம்சத்தில் லக்னம்: சந்திரனின் நவாம்ச ராசி காட்டப்படுள்ளது (பொதுவான பாரம்பரிய குறியீடு).', 'Navamsa marker shows the navamsa sign of the Moon (common traditional notation).', dl)}</div>
   `;
   return [{ html }];
 }
 
-export function section3(d: Dossier, dl: DocLang): Atom[] {
+export function section36Months(d: Dossier, dl: DocLang): Atom[] {
+  const data = buildDasa36(d, new Date());
+  const atoms: Atom[] = [{
+    html: `
+      <div class="p-h2">${L('2. அடுத்த 36 மாத தசாபுத்தி & கோச்சார பலன்கள்', '2. Next 36 Months Combined Dasa-Bhukti & Gochara Prediction', dl)}</div>
+      <div class="p-sub">${esc(data.windowLabel)} · ${L('இப்போது நடப்பு', 'Active now', dl)}: ${esc(pn(data.activeNow.maha, dl))}–${esc(pn(data.activeNow.bhukti, dl))}–${esc(pn(data.activeNow.antara, dl))}</div>
+    `,
+  }];
+  const chunk = 10;
+  for (let i = 0; i < data.months.length; i += chunk) {
+    const rows = data.months.slice(i, i + chunk).map((m) => {
+      const shortTa = m.prediction.ta.length > 78 ? `${m.prediction.ta.slice(0, 76)}…` : m.prediction.ta;
+      const shortEn = m.prediction.en.length > 78 ? `${m.prediction.en.slice(0, 76)}…` : m.prediction.en;
+      const bandColor = m.net >= 80 ? '#15803D' : m.net >= 60 ? '#111827' : m.net >= 40 ? '#52525B' : '#B91C1C';
+      return `<tr>
+        <td class="n c pk">${m.index}</td>
+        <td class="pk">${esc(BI(m.label, dl))}</td>
+        <td class="n">${esc(pn(m.maha, dl))}–${esc(pn(m.bhukti, dl))}–${esc(pn(m.antara, dl))}</td>
+        <td>${esc(BI(m.transitSummary, dl))}${m.gocharaFlags.length ? `<div class="p-note">${m.gocharaFlags.map((f) => esc(BI(f.label, dl))).join(' · ')}</div>` : ''}</td>
+        <td class="n c pk" style="color:${bandColor}">${m.net}<div class="p-note" style="color:${bandColor}">${esc(BI(m.bandLabel, dl))}</div></td>
+        <td>${dl !== 'en' ? esc(shortTa) : ''}${dl === 'bi' ? '<br/>' : ''}${dl !== 'ta' ? `<span style="color:#A1A1AA">${esc(shortEn)}</span>` : ''}</td>
+      </tr>`;
+    }).join('');
+    atoms.push({
+      html: `<table class="p-tbl">
+        <thead><tr>
+          <th class="n c">#</th><th>${L('மாதம்', 'Month', dl)}</th><th>${L('தசை–புக்தி–அந்தரம்', 'Dasa–Bhukti–Antara', dl)}</th>
+          <th>${L('கோச்சார நிலை', 'Gochara', dl)}</th><th class="n c">${L('மதிப்பெண்', 'Net', dl)}</th><th>${L('பலன்', 'Prediction', dl)}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody></table>`,
+    });
+  }
+  return atoms;
+}
+
+export function sectionEphemeris(d: Dossier, dl: DocLang): Atom[] {
   const rows = d.grahas.map((g) => `
     <tr>
       <td class="pk">${esc(pn(g.id, dl))}</td>
@@ -237,7 +201,7 @@ export function section3(d: Dossier, dl: DocLang): Atom[] {
     return `<tr><td class="pk">${esc(PLANET_NAMES[from].abbr)}</td>${tds}</tr>`;
   }).join('');
   const html = `
-    <div class="p-h2">${L('3. நவகிரக அட்டவணை & பார்வை மேட்ரிக்ஸ்', '3. 9-Graha Ephemeris & Paarvai Matrix', dl)}</div>
+    <div class="p-h2">${L('4. கிரக நிலைகள் & பார்வை அட்டவணை', '4. 9-Graha Ephemeris & Planetary Paarvai Matrix', dl)}</div>
     <table class="p-tbl">
       <thead><tr>
         <th>${L('கிரகம்', 'Graha', dl)}</th><th>${L('ராசி / பாகை', 'Rasi / Degree', dl)}</th><th>${L('நட்சத்திரம் / பாதம்', 'Star / Pada', dl)}</th>
@@ -255,8 +219,8 @@ export function section3(d: Dossier, dl: DocLang): Atom[] {
   return [{ html }];
 }
 
-export function section4(d: Dossier, dl: DocLang): Atom[] {
-  const atoms: Atom[] = [{ html: `<div class="p-h2">${L('4. 40-காரணி கிரக ஆய்வு', '4. 40-Factor Graha Inspector', dl)}</div><div class="p-sub">${L('ஒவ்வொரு கிரகத்திற்கும் பாரம்பரிய 40 காரணிகளின் உண்மை மதிப்பீடுகள்.', 'Live verdicts for all 40 classical factors, per graha.', dl)}</div>` }];
+export function sectionInspector(d: Dossier, dl: DocLang): Atom[] {
+  const atoms: Atom[] = [{ html: `<div class="p-h2">${L('5. 40 காரணிகள் நுண்ணாய்வு', '5. 40-Factor Classical Graha Inspector', dl)}</div><div class="p-sub">${L('ஒவ்வொரு கிரகத்திற்கும் பாரம்பரிய 40 காரணிகளின் உண்மை மதிப்பீடுகள்.', 'Live verdicts for all 40 classical factors, per graha.', dl)}</div>` }];
   for (const g of d.grahas) {
     const half = Math.ceil(g.factors.length / 2);
     const col = (fs: typeof g.factors) => fs.map((f) => `<div class="p-kv"><span class="k">${f.n}. ${esc(BI(f.label, dl))}</span><span class="v">${esc(BI(f.value, dl))}</span></div>`).join('');
@@ -270,7 +234,7 @@ export function section4(d: Dossier, dl: DocLang): Atom[] {
   return atoms;
 }
 
-export function section5(d: Dossier, dl: DocLang): Atom[] {
+export function sectionStrength(d: Dossier, dl: DocLang): Atom[] {
   const savRows = RASI.map((r, i) => {
     const cols = Object.keys(d.bav).map((p) => `<td class="n c">${d.bav[p][i]}</td>`).join('');
     const total = Object.keys(d.bav).reduce((s, p) => s + d.bav[p][i], 0);
@@ -284,7 +248,7 @@ export function section5(d: Dossier, dl: DocLang): Atom[] {
     <tr><td class="pk">${esc(BI(y.name, dl))}</td><td>${y.grahas.map((g) => esc(pn(g, dl))).join(', ')}</td>
     <td>${esc(BI(y.effect, dl))}</td><td class="c">${esc(BI({ ta: y.nature === 'benefic' ? 'சுபம்' : y.nature === 'malefic' ? 'பாவம்' : 'சமம்', en: y.nature }, dl))}</td></tr>`).join('');
   const html = `
-    <div class="p-h2">${L('5. பலம் · யோகங்கள் · SAV', '5. Strength · Yogas · Sarvashtakavarga', dl)}</div>
+    <div class="p-h2">${L('6. பலம், யோகங்கள் & சர்வாஷ்டகவர்க்கம்', '6. Strength, Yogas & Sarvashtakavarga', dl)}</div>
     <div class="p-h3">${L('சர்வாஷ்டகவர்கம் (SAV) — 337 பிண்டுகள்', 'Sarvashtakavarga (SAV) — 337 bindus', dl)}</div>
     <table class="p-tbl">
       <thead><tr><th>${L('ராசி', 'Rasi', dl)}</th>${Object.keys(d.bav).map((p) => `<th class="c n">${esc(PLANET_NAMES[p].abbr)}</th>`).join('')}<th class="c n">Σ</th></tr></thead>
@@ -304,33 +268,8 @@ export function section5(d: Dossier, dl: DocLang): Atom[] {
   return [{ html }];
 }
 
-export function section6(d: Dossier, dl: DocLang): Atom[] {
-  const rows = d.gochara.grahas.map((g) => `
-    <tr><td class="pk">${esc(pn(g.id, dl))}</td>
-    <td class="n">${esc(rasiName(g.rasi, dl))} ${degMin(g.lon % 30)}</td>
-    <td class="n c">${g.fromMoon > 0 ? '+' : ''}${g.fromMoon}</td>
-    <td class="n c">${g.fromLagna > 0 ? '+' : ''}${g.fromLagna}</td>
-    <td class="c">${g.retro ? L('வ', 'R', dl) : ''}</td></tr>`).join('');
-  const flags = d.gochara.flags.map((f) => `
-    <div class="p-kv"><span class="k">${esc(BI(f.name, dl))}</span><span class="v" style="font-weight:${f.active ? 700 : 400};color:${f.active ? '#B91C1C' : '#A1A1AA'}">${esc(BI(f.detail, dl))}</span></div>`).join('');
-  const html = `
-    <div class="p-h2">${L('6. இன்றைய கோச்சாரம்', '6. Live Gochara', dl)}</div>
-    <div class="p-sub">${L('கோச்சார நாள்', 'Transit date', dl)}: ${esc(d.gochara.date)}</div>
-    <table class="p-tbl">
-      <thead><tr><th>${L('கிரகம்', 'Graha', dl)}</th><th>${L('ராசி / பாகை', 'Rasi / Deg', dl)}</th><th class="n c">${L('சந்திரனிலிருந்து', 'From Moon', dl)}</th><th class="n c">${L('லக்னத்திலிருந்து', 'From Lagna', dl)}</th><th class="c">${L('வ', 'R', dl)}</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="p-h3">${L('சிறப்பு நிலைகள்', 'Special Conditions', dl)}</div>
-    ${flags}
-    <div class="p-h3">${L('ராகு–கேது அச்சு & குரு பலம்', 'Rahu–Ketu Axis & Guru Bala', dl)}</div>
-    <div class="p-body"><p>${esc(BI(d.gochara.flags.find((f) => f.key === 'rahuKetu')?.detail ?? { ta: '', en: '' }, dl))}</p>
-    <p>${esc(BI(d.gochara.flags.find((f) => f.key === 'guruBala')?.detail ?? { ta: '', en: '' }, dl))}</p></div>
-  `;
-  return [{ html }];
-}
-
-export function section7(d: Dossier, dl: DocLang): Atom[] {
-  const atoms: Atom[] = [{ html: `<div class="p-h2">${L('7. ஐந்து துறை பலன்கள்', '7. Five-Domain Predictions', dl)}</div><div class="p-sub">${L('40 காரணிகளின் எடையிடப்பட்ட தொகுப்பு · விதி அடிப்படை பட்டியலுடன்', 'Weighted synthesis of 40 factors, with rule-basis citations', dl)}</div>` }];
+export function sectionPredictions(d: Dossier, dl: DocLang): Atom[] {
+  const atoms: Atom[] = [{ html: `<div class="p-h2">${L('7. ஐந்து துறை வாழ்க்கை பலன்கள்', '7. Five-Domain Classical Predictions', dl)}</div><div class="p-sub">${L('40 காரணிகளின் எடையிடப்பட்ட தொகுப்பு · விதி அடிப்படை பட்டியலுடன்', 'Weighted synthesis of 40 factors, with rule-basis citations', dl)}</div>` }];
   for (const p of d.predictions) {
     const cite = p.contributors.slice(0, 4).join(' · ');
     atoms.push({
@@ -347,8 +286,8 @@ export function section7(d: Dossier, dl: DocLang): Atom[] {
   return atoms;
 }
 
-export function section8(rows: TimelineRow[], dl: DocLang): Atom[] {
-  const atoms: Atom[] = [{ html: `<div class="p-h2">${L('8. 0–70 வயது தசா-புக்திகாலக்கோடு', '8. Birth–70yr Dasa-Bhukti Timeline', dl)}</div><div class="p-sub">${L('முழு வரிசை அட்டவணை · வயது வாரியான வாழ்க்கை கால கணிப்புகள்', 'Full chronological table with age-calibrated predictions', dl)}</div>` }];
+export function sectionTimeline(rows: TimelineRow[], dl: DocLang): Atom[] {
+  const atoms: Atom[] = [{ html: `<div class="p-h2">${L('3. பிறப்பு முதல் 70 வயது தசாபுத்தி பலன்கள்', '3. Birth to 70 Years Dasa-Bhukti Life Prediction', dl)}</div><div class="p-sub">${L('முழு வரிசை அட்டவணை · வயது வாரியான வாழ்க்கை கால கணிப்புகள்', 'Full chronological table with age-calibrated predictions', dl)}</div>` }];
   const chunk = 15;
   for (let i = 0; i < rows.length; i += chunk) {
     const body = rows.slice(i, i + chunk).map((r) => {
@@ -377,12 +316,12 @@ function doshaText(hasDosha: boolean, cancelled: boolean, dl: DocLang): string {
   return base + (cancelled ? L(' (குரு/சந்திர ராசி ரத்து)', ' (cancelled by Guru/Moon-rasi rule)', dl) : '');
 }
 
-export function section9(pd: PdfPoruthamData, dl: DocLang): Atom[] {
+export function sectionMarriage(pd: PdfPoruthamData, dl: DocLang): Atom[] {
   const r = pd.result;
   const rowsA = r.moduleA.rows.map((x) => `<tr><td class="pk">${esc(BI(x.name, dl))}</td><td>${esc(BI(x.status, dl))}</td><td class="n c">${x.points}/${x.max}</td><td>${esc(BI(x.detail, dl))}</td></tr>`).join('');
   const rowsE = r.moduleE.rows.map((x) => `<tr><td class="pk">${esc(BI(x.name, dl))}</td><td>${esc(BI(x.status, dl))}</td><td class="n c">${x.points}/${x.max}</td><td>${esc(BI(x.detail, dl))}</td></tr>`).join('');
   const html1 = `
-    <div class="p-h2">${L('9. திருமணப் பொருத்தம் & 20-ஆண்டு நிலைத்தன்மை', '9. Marriage Porutham & 20-Year Stability', dl)}</div>
+    <div class="p-h2">${L('8. திருமணப் பொருத்தம் & 20 ஆண்டு ஆய்வு', '8. Marriage Compatibility & 20-Year Stability Report', dl)}</div>
     <div class="p-sub">${esc(pd.bride)} · ${esc(pd.groom)}</div>
     <div class="p-verdict">
       <span class="vt">${esc(BI(r.moduleF.verdict, dl))}</span>
@@ -424,7 +363,7 @@ export function section9(pd: PdfPoruthamData, dl: DocLang): Atom[] {
   return [{ html: html1 }, { html: html2 }];
 }
 
-export function section10(dl: DocLang): Atom[] {
+export function sectionReference(dl: DocLang): Atom[] {
   const rasiRows = RASI_REF.map((r) => `<tr>
     <td class="pk">${esc(L(r.ta, r.en, dl))}</td>
     <td>${r.lords.map((l) => esc(pn(l, dl))).join(', ')}</td>
@@ -434,7 +373,7 @@ export function section10(dl: DocLang): Atom[] {
   const dasaLine = Object.keys(DASA_YEARS).map((p) => `${PLANET_NAMES[p].ta} ${DASA_YEARS[p]}y`).join(' · ');
   const atoms: Atom[] = [{
     html: `
-      <div class="p-h2">${L('10. ஜோதிட அடிப்படை இணைப்பு', '10. Jothidam Reference Appendix', dl)}</div>
+      <div class="p-h2">${L('9. ஜோதிட அடிப்படை வழிகாட்டி', '9. Jothidam Reference Guide Appendix', dl)}</div>
       <div class="p-h3">${L('ராசி ஆட்சி/உச்சம்/நீச்சம் அட்டவணை', 'Rasi Dignity Table (Own / Exaltation / Debilitation)', dl)}</div>
       <table class="p-tbl">
         <thead><tr><th>${L('ராசி', 'Rasi', dl)}</th><th>${L('ஆட்சி', 'Own Lords', dl)}</th><th>${L('உச்சம் (பரமோச்சம்)', 'Exalt (Paramocham)', dl)}</th><th>${L('நீச்சம் (பரமோநீச்சம்)', 'Debil (Paramoneecham)', dl)}</th></tr></thead>
@@ -485,16 +424,15 @@ async function generatePdf(
 ): Promise<{ url: string; filename: string }> {
   const generated = fmtDate(new Date());
   const atoms: Atom[] = [];
-  if (selected.has(1)) atoms.push(...section1(d, dl, generated));
-  if (selected.has(2)) atoms.push(...section2(d, dl));
-  if (selected.has(3)) atoms.push(...section3(d, dl));
-  if (selected.has(4)) atoms.push(...section4(d, dl));
-  if (selected.has(5)) atoms.push(...section5(d, dl));
-  if (selected.has(6)) atoms.push(...section6(d, dl));
-  if (selected.has(7)) atoms.push(...section7(d, dl));
-  if (selected.has(8)) atoms.push(...section8(rows, dl));
-  if (selected.has(9) && porutham) atoms.push(...section9(porutham, dl));
-  if (selected.has(10)) atoms.push(...section10(dl));
+  if (selected.has(1)) atoms.push(...sectionCharts(d, dl));
+  if (selected.has(2)) atoms.push(...section36Months(d, dl));
+  if (selected.has(3)) atoms.push(...sectionTimeline(rows, dl));
+  if (selected.has(4)) atoms.push(...sectionEphemeris(d, dl));
+  if (selected.has(5)) atoms.push(...sectionInspector(d, dl));
+  if (selected.has(6)) atoms.push(...sectionStrength(d, dl));
+  if (selected.has(7)) atoms.push(...sectionPredictions(d, dl));
+  if (selected.has(8) && porutham) atoms.push(...sectionMarriage(porutham, dl));
+  if (selected.has(9)) atoms.push(...sectionReference(dl));
 
   const [{ jsPDF }, { default: html2canvas }] = await Promise.all([import('jspdf'), import('html2canvas')]);
 
@@ -535,7 +473,7 @@ async function generatePdf(
 
   const moon = d.grahas.find((g) => g.id === 'Moon')!;
   const head = `<div class="p-head">
-    <span><b>${esc(d.profile.name)}</b> · ${L('லக்னம்', 'Lagna', dl)} ${esc(rasiName(d.lagnaRasi, dl))} ${degMin(d.lagnaLon % 30)} · ${L('ராசி', 'Rasi', dl)} ${esc(rasiName(moon.rasi, dl))} · ${L('நட்சத்திரம்', 'Star', dl)} ${esc(nakName(moon.nakIdx, dl))} ${moon.pada} · ${esc(d.profile.panchangamMode)}</span>
+    <span><b>${esc(profileName(d.profile.name, dl))}</b> · ${L('லக்னம்', 'Lagna', dl)} ${esc(rasiName(d.lagnaRasi, dl))} ${degMin(d.lagnaLon % 30)} · ${L('ராசி', 'Rasi', dl)} ${esc(rasiName(moon.rasi, dl))} · ${L('நட்சத்திரம்', 'Star', dl)} ${esc(nakName(moon.nakIdx, dl))} ${moon.pada} · ${esc(d.profile.panchangamMode)}</span>
     <span>${dl === 'ta' ? 'தமிழ்' : dl === 'en' ? 'English' : 'தமிழ் + English'}</span>
   </div>`;
 
@@ -558,8 +496,10 @@ async function generatePdf(
     if (i > 0) pdf.addPage();
     pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, 297);
   }
-  const safe = d.profile.name.trim().replace(/\s+/g, '_').replace(/[^\w\u0B80-\u0BFF-]/g, '') || 'Jathagam';
-  const filename = `${safe}_Jathagam_${generated}.pdf`;
+  const nameForFile = d.profile.name === DEFAULT_PROFILE_NAME
+    ? 'Tamizh'
+    : (d.profile.name.trim().replace(/\s+/g, '_').replace(/[^\w\u0B80-\u0BFF-]/g, '') || 'Jathagam');
+  const filename = `${nameForFile}_Jathagam_${d.profile.date}.pdf`;
   const out = pdf.output('bloburl') as unknown as string | URL;
   const url = typeof out === 'string' ? out : out.href;
   stage.innerHTML = '';
@@ -572,13 +512,13 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
 }) {
   const [open, setOpen] = useState(false);
   const [docLang, setDocLang] = useState<DocLang>(uiLang);
-  const [selected, setSelected] = useState<Set<number>>(new Set([1, 2, 3, 4, 5, 6, 7, 8, 10]));
+  const [selected, setSelected] = useState<Set<number>>(new Set(DEFAULT_SECTION_IDS));
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [result, setResult] = useState<{ url: string; filename: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const enabled = (id: number) => id !== 9 || porutham !== null;
+  const enabled = (id: number) => id !== 8 || porutham !== null;
   const count = SECTIONS.filter((s) => selected.has(s.id)).length;
   const setAll = (on: boolean) => setSelected(on ? new Set(SECTIONS.filter((s) => enabled(s.id)).map((s) => s.id)) : new Set());
   const toggle = (id: number) => {
@@ -587,7 +527,6 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
     if (n.has(id)) n.delete(id); else n.add(id);
     setSelected(n);
   };
-  const applyPreset = (ids: number[]) => setSelected(new Set(ids.filter(enabled)));
 
   const run = async () => {
     setBusy(true);
@@ -663,13 +602,11 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
             <div className="modal-row">
               <label className="modal-check master">
                 <input type="checkbox" checked={count === SECTIONS.filter((s) => enabled(s.id)).length} onChange={(e) => setAll(e.target.checked)} />
-                <span>{uiLang === 'ta' ? 'அனைத்து பகுதிகளும்' : 'Select All Sections'}</span>
+                <span>{uiLang === 'ta' ? 'அனைத்தையும் தேர்ந்தெடு' : 'Select All'}</span>
               </label>
-              <div className="seg">
-                {PRESETS.map((p) => (
-                  <button key={p.key} onClick={() => applyPreset(p.ids)}>{uiLang === 'ta' ? p.ta : p.en}</button>
-                ))}
-              </div>
+              <button className="pdf-btn" onClick={() => setSelected(new Set(DEFAULT_SECTION_IDS.filter(enabled)))}>
+                {uiLang === 'ta' ? 'இயல்புநிலை 3 பகுதிகள்' : 'Reset to Default 3'}
+              </button>
             </div>
 
             <div className="modal-sections">
@@ -687,7 +624,7 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
               <div className="pdf-error">{uiLang === 'ta' ? 'பிழை: ' : 'Error: '}{error}</div>
             )}
             <div className="modal-foot">
-              <span className="modal-count">{count} / 10 {uiLang === 'ta' ? 'பகுதிகள் தேர்ந்தெடுக்கப்பட்டுள்ளன' : 'Sections Selected'}</span>
+              <span className="modal-count">{count} / 9 {uiLang === 'ta' ? 'பகுதிகள் தேர்ந்தெடுக்கப்பட்டுள்ளன' : 'Sections Selected'}</span>
               <button className="primary-btn" disabled={count === 0 || busy} onClick={run}>
                 {busy
                   ? (uiLang === 'ta' ? `உருவாக்கப்படுகிறது… ${progress}` : `Generating… ${progress}`)
