@@ -23,6 +23,7 @@ export interface MonthEntry {
   year: number; month0: number;  // JS month 0-11
   label: Bilingual;              // 'நவம்பர் 2026' / 'November 2026'
   short: string;                 // "Nov '26"
+  shortTa: string;               // "நவ '26"
   maha: string; bhukti: string; antara: string;
   dasaScore: number; gocharaScore: number; net: number;
   band: Band; bandLabel: Bilingual;
@@ -156,11 +157,14 @@ const DT_AREAS: Record<number, Bilingual> = {
   6: { ta: 'போட்டி/வெற்றி (6)', en: 'Competition/Victory (6th)' },
 };
 
+// இரட்டைப் பெயர்ச்சி verification — classical aspect sets, exactly as specified:
+// Jupiter: 1st (occupation), 5th, 7th, 9th · Saturn: 1st (occupation), 3rd, 7th, 10th.
+const DT_ASPECTS: Record<string, number[]> = { Jupiter: [5, 7, 9], Saturn: [3, 7, 10] };
+
 // Transit planet at house `pHouse` (1-based from lagna) hits target house `tHouse` by occupation or aspect.
 function hits(pHouse: number, tHouse: number, planet: string): boolean {
-  if (pHouse === tHouse) return true;
-  const spec = ASPECT_SPEC[planet];
-  const counts = spec ? spec.nums : [7];
+  if (pHouse === tHouse) return true; // 1st aspect = occupation
+  const counts = DT_ASPECTS[planet] ?? ASPECT_SPEC[planet]?.nums ?? [7];
   for (const num of counts) {
     const target = ((pHouse - 1 + num - 1) % 12) + 1;
     if (target === tHouse) return true;
@@ -386,6 +390,7 @@ export function buildDasa36(d: Dossier, now: Date): Dasa36 {
       year: y, month0: mo0,
       label: { ta: `${MONTH_TA[mo0]} ${y}`, en: `${MONTH_EN[mo0]} ${y}` },
       short: `${MONTH_EN[mo0].slice(0, 3)} '${String(y).slice(2)}`,
+      shortTa: `${MONTH_TA[mo0]} '${String(y).slice(2)}`,
       maha: p1.maha, bhukti: p1.bhukti, antara: p1.antara,
       dasaScore, gocharaScore, net,
       band, bandLabel: BAND_LABEL[band],

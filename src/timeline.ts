@@ -67,12 +67,13 @@ function categoryOf(r: number): Bilingual {
 
 // Sambandham: house distance from dasa lord's rasi to bhukti lord's rasi
 function sambandham(dist: number): { label: Bilingual; score: number } {
-  if (dist === 5 || dist === 9) return { label: { ta: `${dist}/9 திரிகோண சம்பந்தம் — அதிர்ஷ்டம்`, en: `${dist}/9 Trikona link — fortune` }, score: 8 };
-  if (dist === 4 || dist === 10) return { label: { ta: `${dist}/10 கேந்திர சம்பந்தம் — செயல்/வளர்ச்சி`, en: `${dist}/10 Kendra link — action/growth` }, score: 6 };
-  if (dist === 1) return { label: { ta: '1/1 சேர்க்கை — வலுவான ஒருங்கிணைப்பு', en: '1/1 conjunction — strong fusion' }, score: 5 };
-  if (dist === 3 || dist === 11) return { label: { ta: `${dist}/11 உபசய சம்பந்தம் — முயற்சி/பலன்`, en: `${dist}/11 Upachaya link — effort/gain` }, score: 2 };
-  if (dist === 2 || dist === 12) return { label: { ta: `${dist}/12 துவிர்துவாதச சம்பந்தம் — செலவு/மாற்றம்`, en: `${dist}/12 Dwirdwadasa link — expense/adjustment` }, score: -5 };
-  return { label: { ta: `${dist}/8 சஷ்டாஷ்டக சம்பந்தம் — உராய்வு`, en: `${dist}/8 Shashtashtaka link — friction` }, score: -8 };
+  if (dist === 1) return { label: { ta: '1/1 சேர்க்கை — இணைவு/பலம்', en: '1/1 Conjunction link — union/strength' }, score: 5 };
+  if (dist === 2 || dist === 12) return { label: { ta: '2/12 துவிர்துவாதச சம்பந்தம் — செலவு/மாற்றம்', en: '2/12 Dwirdwadasa link — expense/adjustment' }, score: -5 };
+  if (dist === 3 || dist === 11) return { label: { ta: '3/11 உபசய சம்பந்தம் — முயற்சி/பலன்', en: '3/11 Upachaya link — effort/gain' }, score: 2 };
+  if (dist === 4 || dist === 10) return { label: { ta: '4/10 கேந்திர சம்பந்தம் — செயல்/வளர்ச்சி', en: '4/10 Kendra link — action/growth' }, score: 6 };
+  if (dist === 5 || dist === 9) return { label: { ta: '5/9 திரிகோண சம்பந்தம் — அதிர்ஷ்டம்', en: '5/9 Trikona link — fortune' }, score: 8 };
+  if (dist === 6 || dist === 8) return { label: { ta: '6/8 சஷ்டாஷ்டக சம்பந்தம் — உராய்வு', en: '6/8 Shashtashtaka link — friction' }, score: -8 };
+  return { label: { ta: '1/7 சமசப்தம சம்பந்தம் — சமநிலை/உறவு', en: '1/7 Sama-saptama link — balance/relationship' }, score: 0 };
 }
 
 export function predictBhukti(dasaLord: string, bhuktiLord: string, midAge: number, d: Dossier): BhuktiPrediction {

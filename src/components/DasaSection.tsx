@@ -109,7 +109,7 @@ export default function DasaSection({ d, onGoTimeline }: { d: Dossier; onGoTimel
               title={`${m.label.ta} — ${m.net}/100 · ${m.bandLabel.ta}`}
             >
               <span className="m36-bar-wrap"><span className="m36-bar" style={{ height: `${Math.max(8, m.net)}%`, background: BAND_COLOR[m.band] }} /></span>
-              <span className="m36-lab num">{m.short}</span>
+              <span className="m36-lab num">{lang === 'ta' ? m.shortTa : m.short}</span>
             </button>
           ))}
         </div>

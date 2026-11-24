@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Dossier, Bilingual } from '../engine';
-import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, fmtDate } from '../engine';
+import type { Dossier, Bilingual, GrahaEval } from '../engine';
+import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, fmtDate, navamsaRasi } from '../engine';
 import type { TimelineRow } from '../timeline';
 import type { PoruthamResult } from '../porutham';
 import { buildDasa36 } from '../dasa36';
@@ -19,7 +19,11 @@ const pn = (id: string, dl: DocLang) => BI({ ta: PLANET_NAMES[id].ta, en: PLANET
 const rasiName = (i: number, dl: DocLang) => BI({ ta: RASI[i].ta, en: RASI[i].en }, dl);
 const nakName = (i: number, dl: DocLang) => BI({ ta: NAKSHATRA[i].ta, en: NAKSHATRA[i].en }, dl);
 const degMin = (deg: number) => `${Math.floor(deg)}° ${String(Math.floor((deg % 1) * 60)).padStart(2, '0')}'`;
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s: string) => s
+  .normalize('NFC')
+  .replace(/\$([^$]*)\$/g, '$1')
+  .replace(/\\theta/g, 'θ')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 interface Atom { html: string }
 
@@ -87,11 +91,15 @@ const PDF_CSS = `
 .p-verdict .vs { font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #B91C1C; font-weight: 700; }
 .p-body p { margin: 6px 0; color: #3F3F46; font-size: 9.5px; line-height: 1.65; }
 .p-atom { width: 100%; }
+tr { break-inside: avoid; page-break-inside: avoid; }
+thead { display: table-header-group; }
 `;
 
 // ---------- section builders ----------
 
-function siTable(grid: Record<number, string[]>, lagnaRasi: number, label: string): string {
+function siTable(grid: Record<number, string[]>, lagnaRasi: number, label: string, d: Dossier, dl: DocLang): string {
+  const gm: Record<string, GrahaEval> = {};
+  for (const g of d.grahas) gm[g.id] = g;
   const cells: string[] = [];
   for (let row = 0; row < 4; row++) {
     const tds: string[] = [];
@@ -102,9 +110,12 @@ function siTable(grid: Record<number, string[]>, lagnaRasi: number, label: strin
       const lines = (grid[ri] ?? []).map((s) => {
         const id = s.split(' ')[0];
         const b = badgeFor(id, ri);
-        return `<span class="gl">${esc(s)}${b ? ` <span class="bg ${b === 'ஆ' ? 'a' : b === 'உ' ? 'u' : 'nb'}">${b}</span>` : ''}</span>`;
+        const name = esc(BI({ ta: PLANET_NAMES[id].ta, en: PLANET_NAMES[id].en }, dl));
+        const deg = gm[id] ? ` ${Math.floor(gm[id].deg)}°` : '';
+        return `<span class="gl">${name}${deg}${b ? ` <span class="bg ${b === 'ஆ' ? 'a' : b === 'உ' ? 'u' : 'nb'}">${b}</span>` : ''}</span>`;
       }).join('');
-      tds.push(`<td class="${ri === lagnaRasi ? 'lagna' : ''}"><span class="tag">${esc(RASI[ri].ta)}</span>${lines}</td>`);
+      const lagnaMark = ri === lagnaRasi ? `<span class="gl" style="font-weight:700;color:#B91C1C">${L('லக்', 'Asc', dl)}</span>` : '';
+      tds.push(`<td class="${ri === lagnaRasi ? 'lagna' : ''}"><span class="tag">${esc(RASI[ri].ta)}</span>${lagnaMark}${lines}</td>`);
     }
     cells.push(`<tr>${tds.join('')}</tr>`);
   }
@@ -138,9 +149,9 @@ export function sectionCharts(d: Dossier, dl: DocLang): Atom[] {
       </div>
     </div>
     <div class="p-sub">${L('தென்னிந்திய 4×4 அமைப்பு · ஆட்சி (ஆ) · உச்சம் (உ) · நீச்சம் (நீ) பேட்ஜ்கள் · கருப்பு எல்லை = லக்னம்', 'South Indian 4×4 format · dignity badges: own (ஆ), exalt (உ), debil (நீ) · heavy border = Lagna', dl)}</div>
-    ${siTable(d.rasiGrid, d.lagnaRasi, L('ராசி குண்டலி (D1)', 'Rasi Chart (D1)', dl))}
-    ${siTable(d.navamsaGrid, moon.d9, L('நவாம்ச குண்டலி (D9)', 'Navamsa Chart (D9)', dl))}
-    <div class="p-note">${L('நவாம்சத்தில் லக்னம்: சந்திரனின் நவாம்ச ராசி காட்டப்படுள்ளது (பொதுவான பாரம்பரிய குறியீடு).', 'Navamsa marker shows the navamsa sign of the Moon (common traditional notation).', dl)}</div>
+    ${siTable(d.rasiGrid, d.lagnaRasi, L('ராசி குண்டலி (D1)', 'Rasi Chart (D1)', dl), d, dl)}
+    ${siTable(d.navamsaGrid, navamsaRasi(d.lagnaLon), L('நவாம்ச குண்டலி (D9)', 'Navamsa Chart (D9)', dl), d, dl)}
+    <div class="p-note">${L('நவாம்ச லக்னம்: லக்னத்தின் சிடீரியல் தூரத்திலிருந்து கணக்கிடப்படுகிறது (Dhanusu 4°53\u2032 → 2-ம் நவாம்சம் = ரிஷபம்).', 'Navamsa lagna is computed from the Lagna sidereal longitude (Dhanusu 4\u203253\u2032 → 2nd navamsa = Rishabam).', dl)}</div>
   `;
   return [{ html }];
 }
@@ -156,8 +167,8 @@ export function section36Months(d: Dossier, dl: DocLang): Atom[] {
   const chunk = 10;
   for (let i = 0; i < data.months.length; i += chunk) {
     const rows = data.months.slice(i, i + chunk).map((m) => {
-      const shortTa = m.prediction.ta.length > 78 ? `${m.prediction.ta.slice(0, 76)}…` : m.prediction.ta;
-      const shortEn = m.prediction.en.length > 78 ? `${m.prediction.en.slice(0, 76)}…` : m.prediction.en;
+      const shortTa = m.prediction.ta;
+      const shortEn = m.prediction.en;
       const bandColor = m.net >= 80 ? '#15803D' : m.net >= 60 ? '#111827' : m.net >= 40 ? '#52525B' : '#B91C1C';
       return `<tr>
         <td class="n c pk">${m.index}</td>
@@ -271,10 +282,10 @@ export function sectionStrength(d: Dossier, dl: DocLang): Atom[] {
 export function sectionPredictions(d: Dossier, dl: DocLang): Atom[] {
   const atoms: Atom[] = [{ html: `<div class="p-h2">${L('7. ஐந்து துறை வாழ்க்கை பலன்கள்', '7. Five-Domain Classical Predictions', dl)}</div><div class="p-sub">${L('40 காரணிகளின் எடையிடப்பட்ட தொகுப்பு · விதி அடிப்படை பட்டியலுடன்', 'Weighted synthesis of 40 factors, with rule-basis citations', dl)}</div>` }];
   for (const p of d.predictions) {
-    const cite = p.contributors.slice(0, 4).join(' · ');
+    const cite = p.contributors.slice(0, 4).map((c) => BI(c, dl)).join(' · ');
     atoms.push({
       html: `
-        <div class="p-h3">${esc(BI(p.title, dl))} — <span class="p-medal">${Math.round(p.rating * 20)}</span> / 100</div>
+        <div class="p-h3">${esc(BI(p.title, dl))} — <b>${Math.round(p.rating)}</b>/100</div>
         <div class="p-body">
           ${dl !== 'en' ? `<p>${esc(p.body.ta)}</p>` : ''}
           ${dl !== 'ta' ? `<p>${esc(p.body.en)}</p>` : ''}
@@ -293,7 +304,7 @@ export function sectionTimeline(rows: TimelineRow[], dl: DocLang): Atom[] {
     const body = rows.slice(i, i + chunk).map((r) => {
       const cat = BI(r.prediction.category, dl);
       const txt = (dl === 'en' ? r.prediction.body.en : r.prediction.body.ta).replace(/\s+/g, ' ');
-      const short = txt.length > 92 ? `${txt.slice(0, 90)}…` : txt;
+      const short = txt;
       return `<tr>
         <td class="n">${fmtDate(r.start)} – ${fmtDate(r.end)}</td>
         <td class="n c">${Math.floor(r.ageStart)}y ${Math.round((r.ageStart % 1) * 12)}m</td>

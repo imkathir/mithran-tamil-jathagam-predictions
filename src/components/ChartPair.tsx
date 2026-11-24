@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Dossier, GrahaEval, Bilingual } from '../engine';
-import { RASI, NAKSHATRA, GRAHA_INFO } from '../engine';
+import { RASI, NAKSHATRA, GRAHA_INFO, navamsaRasi } from '../engine';
 import { useLang, useT, GRAHA_ABBR, TAG, pick, ordinal, type Lang } from '../i18n';
 
 // Fixed South Indian 4x4 grid: rasi index -> (row, col)
@@ -69,7 +69,7 @@ export function SIChart({ grid, grahaMap, title, meta, centerTop, centerLines, m
               onClick={onGrahaClick ? () => onGrahaClick(id) : undefined}
               style={onGrahaClick ? { cursor: 'pointer' } : undefined}
             >
-              <span className="abbr">{pick(GRAHA_ABBR[id], lang)}</span>
+              <span className="abbr">{pick(GRAHA_INFO[id], lang)}</span>
               <span className="deg"> {Math.floor(g.deg)}°</span>
               <CellTags g={g} />
             </div>
@@ -173,7 +173,7 @@ export default function ChartPair({ d, selId, onSel }: { d: Dossier; selId: stri
                         onMouseEnter={() => setHoverId(id)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <span className="abbr">{pick(GRAHA_ABBR[id], lang)}</span>
+                        <span className="abbr">{pick(GRAHA_INFO[id], lang)}</span>
                         <span className="deg"> {Math.floor(g.deg)}°</span>
                         <CellTags g={g} />
                       </div>
@@ -219,10 +219,11 @@ export default function ChartPair({ d, selId, onSel }: { d: Dossier; selId: stri
         meta="D9"
         centerTop="D9 · Navamsa"
         centerLines={[
+          `${t('lagna')}: ${pick(RASI[navamsaRasi(d.lagnaLon)], lang)}`,
           `${t('janmaRasi')}: ${pick(RASI[Math.floor(moon.lon / 30)], lang)}`,
           `${t('janmaNak')}: ${pick(NAKSHATRA[moon.nakIdx], lang)}`,
         ]}
-        markRasi={null}
+        markRasi={navamsaRasi(d.lagnaLon)}
         badges={{}}
         tooltips={{}}
       />

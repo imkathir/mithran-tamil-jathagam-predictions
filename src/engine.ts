@@ -133,10 +133,10 @@ export const GRAHA_INFO: Record<string, { ta: string; en: string; sym: string; l
 };
 export const OWN: Record<string, number[]> = { Sun: [4], Moon: [3], Mars: [0, 7], Mercury: [2, 5], Jupiter: [8, 11], Venus: [1, 6], Saturn: [9, 10], Rahu: [], Ketu: [] };
 export const EXALT: Record<string, number> = { Sun: 0, Moon: 2, Mars: 9, Mercury: 5, Jupiter: 3, Venus: 11, Saturn: 6, Rahu: 1, Ketu: 7 };
-export const DEBIL: Record<string, number> = { Sun: 6, Moon: 8, Mars: 3, Mercury: 11, Jupiter: 9, Venus: 5, Saturn: 0, Rahu: 7, Ketu: 1 };
-export const MOOLATRIKONA: Record<string, number> = { Sun: 4, Moon: 3, Mars: 0, Mercury: 5, Jupiter: 8, Venus: 6, Saturn: 10, Rahu: -1, Ketu: -1 };
+export const DEBIL: Record<string, number> = { Sun: 6, Moon: 7, Mars: 3, Mercury: 11, Jupiter: 9, Venus: 5, Saturn: 0, Rahu: 7, Ketu: 1 };
+export const MOOLATRIKONA: Record<string, number> = { Sun: 4, Moon: 2, Mars: 0, Mercury: 5, Jupiter: 8, Venus: 6, Saturn: 10, Rahu: -1, Ketu: -1 };
 export const FRIENDS: Record<string, string[]> = {
-  Sun: ['Moon', 'Mars', 'Jupiter'], Moon: ['Sun', 'Mercury'], Mars: ['Sun', 'Moon', 'Jupiter'], Mercury: ['Sun', 'Venus'],
+  Sun: ['Moon', 'Mars', 'Jupiter'], Moon: ['Sun', 'Mercury', 'Jupiter'], Mars: ['Sun', 'Moon', 'Jupiter'], Mercury: ['Sun', 'Venus'],
   Jupiter: ['Sun', 'Moon', 'Mars'], Venus: ['Mercury', 'Saturn'], Saturn: ['Mercury', 'Venus'], Rahu: ['Venus', 'Saturn'], Ketu: ['Mars', 'Jupiter'],
 };
 export const ENEMIES: Record<string, string[]> = {
@@ -161,7 +161,7 @@ export interface AspectSpec { nums: number[]; traditional?: number[] }
 export const ASPECT_SPEC: Record<string, AspectSpec> = {
   Sun: { nums: [7] }, Moon: { nums: [7] }, Mercury: { nums: [7] }, Venus: { nums: [7] },
   Mars: { nums: [4, 7, 8] }, Jupiter: { nums: [5, 7, 9] }, Saturn: { nums: [3, 7, 10] },
-  Rahu: { nums: [7], traditional: [5, 9] }, Ketu: { nums: [7], traditional: [5, 9] },
+  Rahu: { nums: [7], traditional: [5, 9] }, Ketu: { nums: [7] },
 };
 export interface AspectDetail { num: number; targetRasi: number; targetHouse: number; traditional?: boolean; grahasInTarget: string[] }
 export interface AspectReceivedDetail { from: string; num: number; traditional?: boolean }
@@ -187,7 +187,7 @@ export function dasamsaRasi(lon: number) {
   return (start + part) % 12;
 }
 export function houseFrom(lagnaRasi: number, rasi: number) { return ((rasi - lagnaRasi + 12) % 12) + 1; }
-export const RASI_LORDS = ['Mars', 'Venus', 'Mercury', 'Moon', 'Sun', 'Mercury', 'Jupiter', 'Venus', 'Saturn', 'Saturn', 'Saturn', 'Jupiter'];
+export const RASI_LORDS = ['Mars', 'Venus', 'Mercury', 'Moon', 'Sun', 'Mercury', 'Venus', 'Mars', 'Jupiter', 'Saturn', 'Saturn', 'Jupiter'];
 export const NAK_LORDS = ['Ketu', 'Venus', 'Sun', 'Moon', 'Mars', 'Rahu', 'Jupiter', 'Saturn', 'Mercury'];
 
 export interface Shadbala { sthana: number; dig: number; kala: number; cheshta: number; drik: number; naisargika: number; total: number }
@@ -203,13 +203,14 @@ export interface GrahaEval {
   shadbala: Shadbala;
   nakLord: { id: string; house: number; dignityKey: string; strength: number };
   strength: number; neechaBhanga: boolean; parivarthanaWith: string[]; vipareeta: boolean; kendradhipatya: boolean;
+  harsha: Bilingual | null;   // ஹர்ஷ/சரள/விமல — dusthana lord in its OWN dusthana (ஆட்சி பலம்)
   factors: { n: number; label: Bilingual; value: Bilingual }[];
 }
 export interface Yoga { name: Bilingual; grahas: string[]; effect: Bilingual; nature: 'benefic' | 'malefic' | 'neutral' }
 export interface DasaPeriod { lord: string; start: Date; end: Date; years: number; bhuktis: { lord: string; start: Date; end: Date; antaras: { lord: string; start: Date; end: Date }[] }[] }
 export interface LedgerRow { label: Bilingual; value: Bilingual; sign: 1 | 0 | -1 }
 export interface DomainPrediction {
-  key: string; title: Bilingual; rating: number; contributors: string[];
+  key: string; title: Bilingual; rating: number; contributors: Bilingual[];
   body: Bilingual; ledger: LedgerRow[];
 }
 export interface Dossier {
@@ -238,7 +239,10 @@ function dignityOf(id: string, rasi: number): { key: string; ta: string; en: str
   if (EXALT[id] === rasi) return { key: 'exalt', ta: 'உச்சம்', en: 'Exalted (Uchcha)' };
   if (DEBIL[id] === rasi) return { key: 'debil', ta: 'நீசம்', en: 'Debilitated (Neecha)' };
   if (MOOLATRIKONA[id] === rasi) return { key: 'mt', ta: 'மூலதிரிகோணம்', en: 'Moolatrikona' };
-  return { key: 'neutral', ta: 'நட்பு/பகை நிலை', en: 'Friendship-based' };
+  const signLord = RASI_LORDS[rasi];
+  if (FRIENDS[id]?.includes(signLord)) return { key: 'friend', ta: 'நட்பு', en: 'Friendly Sign' };
+  if (ENEMIES[id]?.includes(signLord)) return { key: 'enemy', ta: 'பகை', en: 'Enemy Sign' };
+  return { key: 'neutral', ta: 'சமம்', en: 'Neutral (Sama)' };
 }
 function friendshipOf(id: string, rasi: number) {
   const lord = RASI_LORDS[rasi];
@@ -318,8 +322,8 @@ function buildFactors(g: GrahaEval, ctx: {
   let benAsp = 0, malAsp = 0;
   g.aspectsReceived.forEach((a) => { const f = byId[a.from]; if (!a.traditional && isBenefic(a.from, f?.waxing ?? true)) benAsp++; else if (!a.traditional) malAsp++; });
   const nakL = g.nakLord;
-  const overrideList = [g.neechaBhanga ? 'Neechabhanga' : '', g.parivarthanaWith.length ? 'Parivarthana' : '', g.vipareeta ? 'Vipareeta' : '', g.kendradhipatya ? 'Kendradhipatya' : ''].filter(Boolean).join(', ') || '—';
-  const overrideListTa = [g.neechaBhanga ? 'நீச்சபங்கம்' : '', g.parivarthanaWith.length ? 'பரிவர்த்தனை' : '', g.vipareeta ? 'விபரீதம்' : '', g.kendradhipatya ? 'கேந்திராதிபத்தியம்' : ''].filter(Boolean).join(', ') || '—';
+  const overrideList = [g.neechaBhanga ? 'Neechabhanga' : '', g.parivarthanaWith.length ? 'Parivarthana' : '', g.harsha ? g.harsha.en : '', g.vipareeta ? 'Vipareeta' : '', g.kendradhipatya ? 'Kendradhipatya' : ''].filter(Boolean).join(', ') || '—';
+  const overrideListTa = [g.neechaBhanga ? 'நீச்சபங்கம்' : '', g.parivarthanaWith.length ? 'பரிவர்த்தனை' : '', g.harsha ? g.harsha.ta : '', g.vipareeta ? 'விபரீதம்' : '', g.kendradhipatya ? 'கேந்திராதிபத்தியம்' : ''].filter(Boolean).join(', ') || '—';
   return [
     F(1, 'கிரகம்', 'Graha', gname.ta, gname.en),
     F(2, 'நீளாங்கம் (சிடெரியல்)', 'Sidereal longitude', dms(g.lon), dms(g.lon)),
@@ -345,7 +349,7 @@ function buildFactors(g: GrahaEval, ctx: {
     F(22, 'செயல் இயல்பு', 'Functional nature', `${g.functional.label.ta}${g.badhaka ? ' · பாதகாதிபதி' : ''}`, `${g.functional.label.en}${g.badhaka ? ' · Badhakadhipathi' : ''}`),
     F(23, 'கர்த்தாரி நிலை', 'Kartari', g.kartari.label.ta, g.kartari.label.en),
     F(24, 'கேந்திரம்/திரிகோணம்', 'Kendra/Trikona', [1, 4, 7, 10].includes(g.house) ? 'கேந்திரம்' : [5, 9].includes(g.house) ? 'திரிகோணம்' : 'துஷ்டானம்/உபசயம்', [1, 4, 7, 10].includes(g.house) ? 'Kendra' : [5, 9].includes(g.house) ? 'Trikona' : 'Dusthana/Upachaya'),
-    F(25, 'உபசயம் (3,6,10,11)', 'Upachaya', [3, 6, 10, 11].includes(g.house) ? 'உபசயம்' : 'இல்லை', [3, 6, 10, 11].includes(g.house) ? 'Upachaya' : 'No'),
+    F(25, 'உபசய ஸ்தானம் (3,6,10,11)', 'Upachaya Sthana (3,6,10,11)', [3, 6, 10, 11].includes(g.house) ? 'உபசயம்' : 'இல்லை', [3, 6, 10, 11].includes(g.house) ? 'Upachaya' : 'No'),
     F(26, 'சர்வாஷ்டகவர்க்கம் (ராசி)', 'Sarvashtakavarga (this Rasi)', `${ctx.sav[g.rasi]} (சராசரி 28${ctx.sav[g.rasi] >= 28 ? ' +' : ' −'}${Math.abs(ctx.sav[g.rasi] - 28)})`, `${ctx.sav[g.rasi]} (avg 28${ctx.sav[g.rasi] >= 28 ? ' +' : ' −'}${Math.abs(ctx.sav[g.rasi] - 28)})`),
     F(27, 'பின்னாஷ்டகவர்க்கம் (சொந்தம்)', 'Bhinnashtakavarga (own)', `${ctx.bav[g.id]?.[g.rasi] ?? '—'}`, `${ctx.bav[g.id]?.[g.rasi] ?? '—'}`),
     F(28, 'பாவ பலம் (வீடு)', 'Bhava Bala (house)', `${ctx.bhavaBala[g.house - 1].score}/100`, `${ctx.bhavaBala[g.house - 1].score}/100`),
@@ -359,7 +363,7 @@ function buildFactors(g: GrahaEval, ctx: {
     F(36, 'சட்பலம் — சேஷ்டா & திருஷ்டி', 'Shadbala: Cheshta & Drik Bala', `சேஷ்டா ${g.shadbala.cheshta} · திருஷ்டி ${g.shadbala.drik}`, `Cheshta ${g.shadbala.cheshta} · Drik ${g.shadbala.drik}`),
     F(37, 'சட்பலம் மொத்தம்', 'Shadbala total', `${g.shadbala.total}/100`, `${g.shadbala.total}/100`),
     F(38, 'நீச்சபங்கம்', 'Neechabhanga', g.neechaBhanga ? 'உண்டு' : 'இல்லை', g.neechaBhanga ? 'Yes' : 'No'),
-    F(39, 'பரிவர்த்தனை & விபரீதம்', 'Parivarthana & Vipareeta', `${g.parivarthanaWith.length ? g.parivarthanaWith.map((id) => GRAHA_INFO[id].ta).join('/') + ' பரிவர்த்தனை' : '—'}${g.vipareeta ? ' · விபரீத ராஜயோகம்' : ''}`, `${g.parivarthanaWith.length ? g.parivarthanaWith.map((id) => GRAHA_INFO[id].en).join('/') + ' exchange' : '—'}${g.vipareeta ? ' · Vipareeta Rajayoga' : ''}`),
+    F(39, 'பரிவர்த்தனை & விபரீதம்', 'Parivarthana & Vipareeta', `${g.parivarthanaWith.length ? g.parivarthanaWith.map((id) => GRAHA_INFO[id].ta).join('/') + ' பரிவர்த்தனை' : '—'}${g.harsha ? ' · ' + g.harsha.ta : ''}${g.vipareeta ? ' · விபரீத ராஜயோகம்' : ''}`, `${g.parivarthanaWith.length ? g.parivarthanaWith.map((id) => GRAHA_INFO[id].en).join('/') + ' exchange' : '—'}${g.harsha ? ' · ' + g.harsha.en : ''}${g.vipareeta ? ' · Vipareeta Rajayoga' : ''}`),
     F(40, 'கேந்திராதிபத்தியம் & ஒட்டுமொத்தம்', 'Kendradhipatya & Overall', `${g.kendradhipatya ? 'கேந்திராதிபத்திய தோஷம் · ' : ''}${g.strength >= 70 ? 'வலுவானது' : g.strength >= 50 ? 'நடுத்தரம்' : 'கவனம் தேவை'} (${g.strength}/100) · ${overrideListTa}`, `${g.kendradhipatya ? 'Kendradhipatya dosha · ' : ''}${g.strength >= 70 ? 'Strong' : g.strength >= 50 ? 'Moderate' : 'Needs care'} (${g.strength}/100) · ${overrideList}`),
   ];
 }
@@ -386,7 +390,8 @@ function synthesizeDomain(def: DomainDef, ctx: {
   const primaryRasi = ((lagnaRasi + def.primaryHouse - 1) % 12);
   const lordId = RASI_LORDS[primaryRasi];
   const lord = byId[lordId];
-  const houseClass = [1, 4, 7, 10].includes(def.primaryHouse) ? 'Kendra' : [5, 9].includes(def.primaryHouse) ? 'Trikona' : [3, 6, 10, 11].includes(def.primaryHouse) ? 'Upachaya' : 'Dusthana';
+  const houseClassEn = [1, 4, 7, 10].includes(def.primaryHouse) ? 'Kendra' : [5, 9].includes(def.primaryHouse) ? 'Trikona' : [3, 6, 10, 11].includes(def.primaryHouse) ? 'Upachaya' : [6, 8, 12].includes(def.primaryHouse) ? 'Dusthana' : def.primaryHouse === 2 || def.primaryHouse === 7 ? 'Maraka (Panapara)' : 'Neutral';
+  const houseClassTa = [1, 4, 7, 10].includes(def.primaryHouse) ? 'கேந்திரம்' : [5, 9].includes(def.primaryHouse) ? 'திரிகோணம்' : [3, 6, 10, 11].includes(def.primaryHouse) ? 'உபசயம்' : [6, 8, 12].includes(def.primaryHouse) ? 'துஷ்டானம்' : def.primaryHouse === 2 || def.primaryHouse === 7 ? 'மாரகம் (பானாபாரம்)' : 'நடுநிலை';
   const ledger: LedgerRow[] = [];
   let score = 0;
   const add = (ta: string, en: string, vta: string, ven: string, sign: 1 | 0 | -1, w = 3) => {
@@ -395,12 +400,12 @@ function synthesizeDomain(def: DomainDef, ctx: {
   };
 
   // 1. Bhava & Bhavadhipathi
-  const lordHouseClass = [1, 4, 7, 10].includes(lord.house) ? 'கேந்திரம்' : [5, 9].includes(lord.house) ? 'திரிகோணம்' : [6, 8, 12].includes(lord.house) ? 'துஷ்டானம்' : 'உபசயம்/பிற';
-  const lordHouseClassEn = [1, 4, 7, 10].includes(lord.house) ? 'Kendra' : [5, 9].includes(lord.house) ? 'Trikona' : [6, 8, 12].includes(lord.house) ? 'Dusthana' : 'Upachaya/other';
+  const lordHouseClass = [1, 4, 7, 10].includes(lord.house) ? 'கேந்திரம்' : [5, 9].includes(lord.house) ? 'திரிகோணம்' : [6, 8, 12].includes(lord.house) ? 'துஷ்டானம்' : lord.house === 2 || lord.house === 7 ? 'மாரகம் (பானாபாரம்)' : [3, 10, 11].includes(lord.house) ? 'உபசயம்' : 'நடுநிலை';
+  const lordHouseClassEn = [1, 4, 7, 10].includes(lord.house) ? 'Kendra' : [5, 9].includes(lord.house) ? 'Trikona' : [6, 8, 12].includes(lord.house) ? 'Dusthana' : lord.house === 2 || lord.house === 7 ? 'Maraka (Panapara)' : [3, 10, 11].includes(lord.house) ? 'Upachaya' : 'Neutral';
   const lSign = [1, 4, 7, 10].includes(lord.house) || [5, 9].includes(lord.house) ? 1 : [6, 8, 12].includes(lord.house) ? -1 : 0;
   add('பாவ & பாவாதிபதி', 'Bhava & Bhavadhipathi',
-    `${def.primaryHouse} ஆம் பாவம் (${houseClass}) · அதிபதி ${GRAHA_INFO[lordId].ta} ${lord.house} ஆம் வீட்டில் (${lordHouseClass})`,
-    `House ${def.primaryHouse} (${houseClass}) · lord ${GRAHA_INFO[lordId].en} in house ${lord.house} (${lordHouseClassEn})`, lSign, 4);
+    `${def.primaryHouse} ஆம் பாவம் (${houseClassTa}) · அதிபதி ${GRAHA_INFO[lordId].ta} ${lord.house} ஆம் வீட்டில் (${lordHouseClass})`,
+    `House ${def.primaryHouse} (${houseClassEn}) · lord ${GRAHA_INFO[lordId].en} in house ${lord.house} (${lordHouseClassEn})`, lSign, 4);
 
   // 2. Functional status
   const fKey = lord.functional.key;
@@ -413,10 +418,11 @@ function synthesizeDomain(def: DomainDef, ctx: {
   const ov: string[] = [], ovEn: string[] = [];
   if (lord.neechaBhanga) { ov.push('நீச்சபங்க ராஜயோகம்'); ovEn.push('Neechabhanga'); }
   if (lord.parivarthanaWith.length) { ov.push('பரிவர்த்தனை'); ovEn.push('Parivarthana'); }
+  if (lord.harsha) { ov.push(lord.harsha.ta); ovEn.push(lord.harsha.en); }
   if (lord.vipareeta) { ov.push('விபரீத ராஜயோகம்'); ovEn.push('Vipareeta'); }
   if (lord.kendradhipatya) { ov.push('கேந்திராதிபத்திய தோஷம்'); ovEn.push('Kendradhipatya'); }
   const dSign: 1 | 0 | -1 = lord.dignityKey === 'exalt' || lord.dignityKey === 'own' || lord.dignityKey === 'mt' || lord.neechaBhanga ? 1 : lord.dignityKey === 'debil' || lord.kendradhipatya ? -1 : 0;
-  add('ஆட்சி/உச்சம்/நீசம் & மாற்றுகள்', 'Dignity & overrides',
+  add('D1 ஆட்சி/உச்சம்/நீசம் & மாற்றுகள்', 'D1 Dignity & overrides',
     `${lord.dignity.ta}${ov.length ? ' · ' + ov.join(', ') : ''}`,
     `${lord.dignity.en}${ovEn.length ? ' · ' + ovEn.join(', ') : ''}`, dSign, 3);
 
@@ -445,7 +451,7 @@ function synthesizeDomain(def: DomainDef, ctx: {
   // 8. D9 dignity
   const d9d = dignityOf(lordId, lord.d9);
   const d9Sign: 1 | 0 | -1 = d9d.key === 'exalt' || d9d.key === 'own' ? 1 : d9d.key === 'debil' ? -1 : 0;
-  add('நவாம்ச பலம் (D9)', 'Navamsa strength (D9)', `${RASI[lord.d9].ta} · ${d9d.ta}`, `${RASI[lord.d9].en} · ${d9d.en}`, d9Sign, 2);
+  add('D9 நவாம்ச பலம் (தனிப் பார்வை)', 'D9 Navamsa strength (separate from D1)', `${RASI[lord.d9].ta} · ${d9d.ta}`, `${RASI[lord.d9].en} · ${d9d.en}`, d9Sign, 2);
 
   // 9. D10 (career/business)
   if (def.useD10) {
@@ -529,7 +535,7 @@ function synthesizeDomain(def: DomainDef, ctx: {
   const rahuT = ctx.gochara.grahas.find((x) => x.id === 'Rahu')!;
   const sadeSati = [12, 1, 2].includes(sani.fromMoon);
   const ashtama = sani.fromMoon === 8;
-  const guruBalam = [1, 2, 4, 5, 7, 9, 10, 11].includes(guru.fromMoon) && guru.fromMoon !== 8;
+  const guruBalam = [2, 5, 7, 9, 11].includes(guru.fromMoon);
   const doubleT = ctx.doubleTransitHouses.includes(def.primaryHouse);
   const rahuGood = [3, 6, 10, 11].includes(rahuT.fromMoon);
   const goBits: string[] = [], goBitsEn: string[] = [];
@@ -546,12 +552,12 @@ function synthesizeDomain(def: DomainDef, ctx: {
   const best = ledger.filter((r) => r.sign === 1).length;
   const worst = ledger.filter((r) => r.sign === -1).length;
   const body: Bilingual = {
-    ta: `${def.primaryHouse} ஆம் பாவம் (${houseClass}) — அதிபதி ${GRAHA_INFO[lordId].ta} ${RASI[lord.rasi].ta}-இல் (${lord.dignity.ta}), ${lordHouseClass}, சட்பலம் ${lord.shadbala.total}/100. நட்சத்திர சாரம்: ${GRAHA_INFO[nk.id].ta} (${nk.house} ஆம் வீடு, ${nkD.ta}). பார்வை: பாவத்தின் மீது சுப ${benH.length}/பாவ ${malH.length}; அதிபதி மீது சுப ${benL.length}/பாவ ${malL.length}. அஷ்டகவர்க்கம் ${savV} பிண்டுகள் (28 ஒப்பீடு). ${ad ? `நடப்பு ${GRAHA_INFO[ad.mahadasa].ta} மகாதசா / ${GRAHA_INFO[ad.bhukti].ta} புக்தி / ${GRAHA_INFO[ad.antara].ta} அந்தரம்` : ''}. கோச்சாரம்: ${goBits.join(', ') || 'சாதாரணம்'}. மொத்தம் ${best} சாதக / ${worst} பிரதிகூல காரணிகள் — மதிப்பீடு ${rating}/100. கீழே ஒவ்வொரு காரணியும் குறிப்பிடப்பட்டுள்ளது.`,
-    en: `House ${def.primaryHouse} (${houseClass}) — lord ${GRAHA_INFO[lordId].en} in ${RASI[lord.rasi].en.split(' ')[0]} (${lord.dignity.en}), ${lordHouseClassEn}, Shadbala ${lord.shadbala.total}/100. Nakshatra Saram: ${GRAHA_INFO[nk.id].en} (house ${nk.house}, ${nkD.en}). Paarvai: on house, benefic ${benH.length}/malefic ${malH.length}; on lord, benefic ${benL.length}/malefic ${malL.length}. Ashtakavarga ${savV} bindus (vs 28). ${ad ? `Current ${ad.mahadasa} Mahadasa / ${ad.bhukti} Bhukti / ${ad.antara} Antara` : ''}. Gochara: ${goBitsEn.join(', ') || 'ordinary'}. Overall ${best} supportive / ${worst} adverse factors — rating ${rating}/100. Every contributing factor is listed below.`,
+    ta: `${def.primaryHouse} ஆம் பாவம் (${houseClassTa}) — அதிபதி ${GRAHA_INFO[lordId].ta} ${RASI[lord.rasi].ta}-இல் (${lord.dignity.ta}), ${lordHouseClass}, சட்பலம் ${lord.shadbala.total}/100. நட்சத்திர சாரம்: ${GRAHA_INFO[nk.id].ta} (${nk.house} ஆம் வீடு, ${nkD.ta}). பார்வை: பாவத்தின் மீது சுப ${benH.length}/பாவ ${malH.length}; அதிபதி மீது சுப ${benL.length}/பாவ ${malL.length}. அஷ்டகவர்க்கம் ${savV} பிண்டுகள் (28 ஒப்பீடு). ${ad ? `நடப்பு ${GRAHA_INFO[ad.mahadasa].ta} மகாதசா / ${GRAHA_INFO[ad.bhukti].ta} புக்தி / ${GRAHA_INFO[ad.antara].ta} அந்தரம்` : ''}. கோச்சாரம்: ${goBits.join(', ') || 'சாதாரணம்'}. மொத்தம் ${best} சாதக / ${worst} பிரதிகூல காரணிகள் — மதிப்பீடு ${rating}/100. கீழே ஒவ்வொரு காரணியும் குறிப்பிடப்பட்டுள்ளது.`,
+    en: `House ${def.primaryHouse} (${houseClassEn}) — lord ${GRAHA_INFO[lordId].en} in ${RASI[lord.rasi].en.split(' ')[0]} (${lord.dignity.en}), ${lordHouseClassEn}, Shadbala ${lord.shadbala.total}/100. Nakshatra Saram: ${GRAHA_INFO[nk.id].en} (house ${nk.house}, ${nkD.en}). Paarvai: on house, benefic ${benH.length}/malefic ${malH.length}; on lord, benefic ${benL.length}/malefic ${malL.length}. Ashtakavarga ${savV} bindus (vs 28). ${ad ? `Current ${ad.mahadasa} Mahadasa / ${ad.bhukti} Bhukti / ${ad.antara} Antara` : ''}. Gochara: ${goBitsEn.join(', ') || 'ordinary'}. Overall ${best} supportive / ${worst} adverse factors — rating ${rating}/100. Every contributing factor is listed below.`,
   };
   return {
     key: def.key, title: def.title, rating,
-    contributors: ledger.filter((r) => r.sign !== 0).slice(0, 6).map((r) => r.value.en),
+    contributors: ledger.filter((r) => r.sign !== 0).slice(0, 6).map((r) => r.value),
     body, ledger,
   };
 }
@@ -602,7 +608,7 @@ export function computeDossier(profile: BirthProfile, transitDate: string): Doss
       aspectsGiven: [], aspectDetails: [], aspectsReceived: [],
       shadbala: { sthana: 50, dig: 45, kala: 50, cheshta: 50, drik: 55, naisargika: 50, total: 50 },
       nakLord: { id: '', house: 0, dignityKey: 'neutral', strength: 50 },
-      strength: 50, neechaBhanga: false, parivarthanaWith: [], vipareeta: false, kendradhipatya: false, factors: [],
+      strength: 50, neechaBhanga: false, parivarthanaWith: [], vipareeta: false, kendradhipatya: false, harsha: null, factors: [],
     } as GrahaEval;
   });
   const byId: Record<string, GrahaEval> = {}; grahas.forEach((g) => (byId[g.id] = g));
@@ -665,9 +671,20 @@ export function computeDossier(profile: BirthProfile, transitDate: string): Doss
     const a = grahas[i], b = grahas[j];
     if (OWN[a.id]?.includes(b.rasi) && OWN[b.id]?.includes(a.rasi)) { a.parivarthanaWith.push(b.id); b.parivarthanaWith.push(a.id); }
   }
-  const dusthanaLords = new Set<string>();
-  [6, 8, 12].forEach((h) => dusthanaLords.add(RASI_LORDS[(lagnaRasi + h - 1) % 12]));
-  grahas.forEach((g) => { if (dusthanaLords.has(g.id) && [6, 8, 12].includes(g.house)) g.vipareeta = true; });
+  const dusthanaHousesOf: Record<string, number[]> = {};
+  [6, 8, 12].forEach((h) => { const l = RASI_LORDS[(lagnaRasi + h - 1) % 12]; (dusthanaHousesOf[l] ??= []).push(h); });
+  grahas.forEach((g) => {
+    const ruled = dusthanaHousesOf[g.id];
+    if (!ruled || ![6, 8, 12].includes(g.house)) return;
+    if (ruled.includes(g.house)) {
+      // Dusthana lord in its OWN dusthana: Harsha (6) / Sarala (8) / Vimala (12) — ஆட்சி பலம், NOT Vipareeta
+      g.harsha = g.house === 6 ? { ta: 'ஹர்ஷ யோகம் (ஆட்சி பலம்)', en: 'Harsha Yoga (own-house strength)' }
+        : g.house === 8 ? { ta: 'சரள யோகம் (ஆட்சி பலம்)', en: 'Sarala Yoga (own-house strength)' }
+        : { ta: 'விமல யோகம் (ஆட்சி பலம்)', en: 'Vimala Yoga (own-house strength)' };
+    } else {
+      g.vipareeta = true;
+    }
+  });
   const kendraLords = new Set<string>();
   [1, 4, 7, 10].forEach((h) => kendraLords.add(RASI_LORDS[(lagnaRasi + h - 1) % 12]));
   grahas.forEach((g) => { if (kendraLords.has(g.id) && [6, 8, 12].includes(g.house) && !g.vipareeta) g.kendradhipatya = true; });
@@ -707,7 +724,8 @@ export function computeDossier(profile: BirthProfile, transitDate: string): Doss
   const addYoga = (ta: string, en: string, grahasList: string[], effTa: string, effEn: string, nature: Yoga['nature']) => yogas.push({ name: { ta, en }, grahas: grahasList, effect: { ta: effTa, en: effEn }, nature });
   grahas.filter((g) => g.neechaBhanga).forEach((g) => addYoga('நீச்சபங்க ராஜயோகம்', 'Neechabhanga Rajayoga', [g.id], `${GRAHA_INFO[g.id].ta} நீசமாக இருந்தாலும் கேந்திரத்தில் உள்ள அதிபதிகளால் பங்கம் நீங்கி ராஜயோக பலன் தரும்.`, `${GRAHA_INFO[g.id].en} is debilitated but cancellation by kendra lords elevates it to Rajayoga strength.`, 'benefic'));
   grahas.filter((g) => g.parivarthanaWith.length).forEach((g) => addYoga('பரிவர்த்தனை யோகம்', 'Parivarthana Yoga', [g.id, ...g.parivarthanaWith], 'இரு கிரகங்கள் பரஸ்பரம் ஒருவர் வீட்டில் மற்றவர் இருக்கும் யோகம்.', 'Mutual exchange of signs between two planets — powerful reciprocal strength.', 'benefic'));
-  grahas.filter((g) => g.vipareeta).forEach((g) => addYoga('விபரீத ராஜயோகம்', 'Vipareeta Rajayoga', [g.id], '6/8/12 ஆம் வீட்டு அதிபதி துஷ்டானத்தில் இருந்து எதிரிகளை வெல்லும் யோகம்.', 'Dusthana lord in dusthana — victory over opponents and hidden gains.', 'benefic'));
+  grahas.filter((g) => g.harsha).forEach((g) => addYoga(g.harsha!.ta.replace(' (ஆட்சி பலம்)', ''), g.harsha!.en.replace(' (own-house strength)', ''), [g.id], `${GRAHA_INFO[g.id].ta} ${g.house} ஆம் வீட்டு அதிபதியாக தன் வீட்டில் (ஆட்சி பலம்) — துஷ்டான பலன்களில் வெற்றி, எதிர்ப்புகள் விலகும்.`, `${GRAHA_INFO[g.id].en} rules house ${g.house} and sits in it (own-house strength) — success in challenging matters, obstacles clear.`, 'benefic'));
+  grahas.filter((g) => g.vipareeta).forEach((g) => addYoga('விபரீத ராஜயோகம்', 'Vipareeta Rajayoga', [g.id], '6/8/12 ஆம் வீட்டு அதிபதி மற்றொரு துஷ்டானத்தில் — எதிரிகளை வென்று மறைமுக லாபம் தரும் யோகம்.', 'Dusthana lord in a different dusthana — victory over opponents and hidden gains.', 'benefic'));
   grahas.filter((g) => g.kendradhipatya).forEach((g) => addYoga('கேந்திராதிபத்திய தோஷம்', 'Kendradhipatya Dosha', [g.id], 'கேந்திராதிபதி துஷ்டானத்தில் இருப்பதால் தொழில்/நிலைத்தன்மையில் கவனம் தேவை.', 'Kendra lord in dusthana — career stability needs conscious effort.', 'malefic'));
   grahas.filter((g) => ['Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'].includes(g.id) && (g.dignityKey === 'own' || g.dignityKey === 'exalt') && [1, 4, 7, 10].includes(g.house)).forEach((g) => addYoga('பஞ்ச மகாபுருஷ யோகம்', 'Pancha Mahapurusha Yoga', [g.id], 'சொந்த/உச்ச வீட்டில் கேந்திரத்தில் — பெரும் ஆளுமை யோகம்.', 'Own/exalted in kendra — great personality and authority yoga.', 'benefic'));
   if (byId.Jupiter && [1, 4, 7, 10].includes(houseFrom(moonRasi, byId.Jupiter.rasi))) addYoga('கஜகேசரி யோகம்', 'Gajakesari Yoga', ['Jupiter', 'Moon'], 'குரு சந்திரனுக்கு கேந்திரத்தில் — புகழ், அறிவு, நிலையான செல்வம்.', 'Jupiter in kendra from Moon — fame, wisdom and lasting wealth.', 'benefic');
@@ -717,7 +735,8 @@ export function computeDossier(profile: BirthProfile, transitDate: string): Doss
   grahas.filter((g) => g.kartari.key === 'shubha').slice(0, 2).forEach((g) => addYoga('சுப கர்த்தாரி யோகம்', 'Shubha Kartari Yoga', [g.id], `${GRAHA_INFO[g.id].ta} சுப கிரகங்களால் சூழப்பட்டுள்ளது — பாதுகாப்பு யோகம்.`, `${GRAHA_INFO[g.id].en} hemmed by benefics — protective yoga.`, 'benefic'));
   grahas.filter((g) => g.kartari.key === 'papa').slice(0, 2).forEach((g) => addYoga('பாப கர்த்தாரி தோஷம்', 'Papa Kartari Dosha', [g.id], `${GRAHA_INFO[g.id].ta} பாவ கிரகங்களால் சூழப்பட்டுள்ளது — கவனம் தேவை.`, `${GRAHA_INFO[g.id].en} hemmed by malefics — needs care.`, 'malefic'));
   const kemadruma = !grahas.some((g) => g.id !== 'Moon' && g.id !== 'Sun' && g.id !== 'Rahu' && g.id !== 'Ketu' && (g.rasi === moonRasi || g.rasi === ((moonRasi + 1) % 12) || g.rasi === ((moonRasi + 11) % 12)));
-  if (kemadruma) addYoga('கேமதுரும தோஷம்', 'Kemadruma Dosha', ['Moon'], 'சந்திரனுக்கு 12/2 இல் கிரகம் இல்லை — மன உறுதி குறையும் காலம்; குரு பார்வையால் பங்கம்.', 'No planet in 12th/2nd from Moon — emotional steadiness needs care; Jupiter aspect cancels.', 'malefic');
+  const jupiterKendraFromMoon = !!byId.Jupiter && [1, 4, 7, 10].includes(houseFrom(moonRasi, byId.Jupiter.rasi));
+  if (kemadruma && !jupiterKendraFromMoon) addYoga('கேமதுரும தோஷம்', 'Kemadruma Dosha', ['Moon'], 'சந்திரனுக்கு 2/12-ல் கிரகம் இல்லை — மன உறுதி குறையும் காலம்.', 'No planet in the 2nd/12th from Moon — emotional steadiness needs care.', 'malefic');
   if (!yogas.length) addYoga('யோகம் இல்லை', 'No major yoga', [], 'இந்த ஜாதகத்தில் முக்கிய யோகம் அமையவில்லை; தசா-புக்தி பலம் முக்கியம்.', 'No major yoga in this chart; Dasa-Bhukti strength is primary.', 'neutral');
 
   // Ashtakavarga
@@ -802,7 +821,7 @@ export function computeDossier(profile: BirthProfile, transitDate: string): Doss
   });
   const sani = gocharaGrahas.find((g) => g.id === 'Saturn')!; const guru = gocharaGrahas.find((g) => g.id === 'Jupiter')!; const rahuT = gocharaGrahas.find((g) => g.id === 'Rahu')!;
   const sadeSati = [12, 1, 2].includes(sani.fromMoon); const ashtamaSani = sani.fromMoon === 8;
-  const guruBalam = [1, 2, 4, 5, 7, 9, 10, 11].includes(guru.fromMoon) && guru.fromMoon !== 8;
+  const guruBalam = [2, 5, 7, 9, 11].includes(guru.fromMoon);
   const rahuKetuTransit = [3, 6, 10, 11].includes(rahuT.fromMoon);
   // Double transit: Saturn & Jupiter both occupy or aspect a house (from Lagna)
   const hitsHouse = (g: { rasi: number }, h: number, nums: number[]) => {

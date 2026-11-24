@@ -283,7 +283,6 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 .graha-line.graha-active .abbr { color: var(--primary); }
 .aspect-badge {
   font-size: 8px; line-height: 1.35; color: var(--primary);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
 .aspect-badge.traditional { color: var(--neutral); }
 
@@ -573,3 +572,10 @@ input:focus, select:focus { outline: none; border-color: var(--primary); }
 .pdf-ready b { font-family: var(--mono); color: var(--foreground); font-size: 11px; }
 .pdf-result-head .primary-btn { text-decoration: none; display: inline-block; }
 .pdf-error { border: 1px solid var(--primary); color: var(--primary); font-size: 11px; padding: 8px 12px; border-radius: 6px; margin-top: 12px; }
+
+/* ---- Print hygiene: never clip table sentences; repeat headers across pages ---- */
+@media print {
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  .m36-pred p, .pred-body, .ledger-value { white-space: normal; overflow: visible; text-overflow: clip; }
+}
