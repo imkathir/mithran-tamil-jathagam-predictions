@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Dossier, Bilingual, GrahaEval } from '../engine';
 import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, fmtDate, navamsaRasi } from '../engine';
+import { canvasToIndexedPngDataUrl } from '../png';
 import type { TimelineRow } from '../timeline';
 import type { PoruthamResult } from '../porutham';
 import { buildDasa36 } from '../dasa36';
@@ -512,9 +513,11 @@ async function generatePdf(
   for (let i = 0; i < pageEls.length; i++) {
     onProgress(`${i + 1} / ${pageEls.length}`);
     await new Promise((r) => requestAnimationFrame(r));
-    const canvas = await html2canvas(pageEls[i], { scale: 2.5, backgroundColor: '#ffffff', logging: false });
+    const canvas = await html2canvas(pageEls[i], { scale: 2, backgroundColor: '#ffffff', logging: false });
     if (i > 0) pdf.addPage();
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297);
+    // Palette PNG (1 byte/pixel inside the PDF) — falls back to plain PNG on old platforms.
+    const img = (await canvasToIndexedPngDataUrl(canvas)) ?? canvas.toDataURL('image/png');
+    pdf.addImage(img, 'PNG', 0, 0, 210, 297, undefined, 'SLOW');
   }
   const nameForFile = d.profile.name === DEFAULT_PROFILE_NAME
     ? 'Tamizh'
