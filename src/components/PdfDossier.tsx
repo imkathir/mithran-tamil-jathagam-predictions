@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Dossier, Bilingual, GrahaEval } from '../engine';
 import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, fmtDate, navamsaRasi } from '../engine';
 import { canvasToIndexedPngDataUrl } from '../png';
@@ -541,6 +541,16 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
   const [result, setResult] = useState<{ url: string; filename: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Esc closes the modal at any time; background scroll is locked while it is open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [open]);
+
   const enabled = (id: number) => id !== 8 || porutham !== null;
   const count = SECTIONS.filter((s) => selected.has(s.id)).length;
   const setAll = (on: boolean) => setSelected(on ? new Set(SECTIONS.filter((s) => enabled(s.id)).map((s) => s.id)) : new Set());
@@ -589,7 +599,7 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h3>{uiLang === 'ta' ? 'ஜாதகக் குறிப்பு பதிவிறக்கம்' : 'Download Jathagam PDF Dossier'}</h3>
-              <button className="modal-x" onClick={() => !busy && setOpen(false)} aria-label="close">×</button>
+              <button type="button" className="modal-x" onClick={() => setOpen(false)} aria-label={uiLang === 'ta' ? 'மூடு' : 'Close'} title={uiLang === 'ta' ? 'மூடு (Esc)' : 'Close (Esc)'}>×</button>
             </div>
 
             {result && (
@@ -602,7 +612,7 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
                   <button className="pdf-btn" onClick={() => { setResult(null); }}>
                     {uiLang === 'ta' ? 'மீண்டும் உருவாக்கு' : 'Generate Again'}
                   </button>
-                  <button className="modal-x" onClick={() => setOpen(false)} aria-label="close">×</button>
+                  <button type="button" className="modal-x" onClick={() => setOpen(false)} aria-label={uiLang === 'ta' ? 'மூடு' : 'Close'} title={uiLang === 'ta' ? 'மூடு (Esc)' : 'Close (Esc)'}>×</button>
                 </div>
               </div>
             )}
