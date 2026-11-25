@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Dossier, Bilingual, GrahaEval } from '../engine';
 import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, fmtDate, navamsaRasi } from '../engine';
 import { canvasToIndexedPngDataUrl } from '../png';
@@ -594,9 +595,9 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
         {uiLang === 'ta' ? 'ஜாதகக் குறிப்பு பதிவிறக்கம்' : 'Download Jathagam PDF'}
       </button>
 
-      {open && (
+      {open && createPortal((
         <div className="modal-backdrop" onClick={() => !busy && setOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h3>{uiLang === 'ta' ? 'ஜாதகக் குறிப்பு பதிவிறக்கம்' : 'Download Jathagam PDF Dossier'}</h3>
               <button type="button" className="modal-x" onClick={() => setOpen(false)} aria-label={uiLang === 'ta' ? 'மூடு' : 'Close'} title={uiLang === 'ta' ? 'மூடு (Esc)' : 'Close (Esc)'}>×</button>
@@ -667,7 +668,7 @@ export default function PdfDossier({ d, rows, porutham, uiLang }: {
             </>)}
           </div>
         </div>
-      )}
+      ), document.body)}
     </>
   );
 }
