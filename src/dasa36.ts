@@ -177,7 +177,7 @@ function covers(pHouseFromMoon: number, house: number, planet: string): boolean 
 export function gocharaSnap(d: Dossier, at: Date): GocharaSnap {
   const y = at.getUTCFullYear(), mo = at.getUTCMonth(), day = at.getUTCDate();
   const jd = jdLocal(y, mo, day, 6, 0, d.profile.timezoneOffsetMinutes);
-  const jd2 = jdLocal(y, mo, day + 2, 6, 0, d.profile.timezoneOffsetMinutes);
+  const jd2 = jd + 1 / 24; // +1 hour probe — spec retrograde rule
   const lons = siderealLongitudes(jd, d.profile.panchangamMode).longitudes;
   const lons2 = siderealLongitudes(jd2, d.profile.panchangamMode).longitudes;
   const lagnaLon = lagnaSidereal(jd, d.profile.latitude, d.profile.longitude, d.profile.panchangamMode).lagna;

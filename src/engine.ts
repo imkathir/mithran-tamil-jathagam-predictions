@@ -4,7 +4,7 @@
 // Gochara with double-transit, full Graha Drishti model, Shadbala components,
 // and deterministic multi-factor classical prediction synthesis with factor ledgers.
 
-import { Body, Ecliptic, GeoVector } from 'astronomy-engine';
+import { Body, Ecliptic, GeoVector, SiderealTime } from 'astronomy-engine';
 
 export type Lang = 'ta' | 'en';
 export type PanchangamMode = 'THIRUKANITHAM' | 'VAKYA';
@@ -18,8 +18,6 @@ export interface BirthProfile {
 export const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 export const norm360 = (x: number) => ((x % 360) + 360) % 360;
 export const norm180 = (x: number) => { let v = norm360(x); return v > 180 ? v - 360 : v; };
-const sin = (d: number) => Math.sin(d * D2R), cos = (d: number) => Math.cos(d * D2R), tan = (d: number) => Math.tan(d * D2R);
-const atan2d = (y: number, x: number) => norm360(Math.atan2(y, x) * R2D);
 
 export function julianDayUTC(y: number, mo: number, d: number, h: number, mi: number, s = 0) {
   const yy = mo <= 2 ? y - 1 : y, mm = mo <= 2 ? mo + 12 : mo;
@@ -28,9 +26,12 @@ export function julianDayUTC(y: number, mo: number, d: number, h: number, mi: nu
 }
 export function lahiriAyanamsa(jd: number) {
   const T = (jd - 2451545.0) / 36525;
-  return norm360(23.8531 + 1.397 * T + 0.00018 * T * T);
+  return norm360(23.857092 + 1.396971 * T + 0.0003086 * T * T);
 }
-const VAKYA_OFFSET: Record<string, number> = { Sun: -1.18, Moon: 0.82, Mars: -0.64, Mercury: 0.41, Jupiter: -0.93, Venus: 0.33, Saturn: -0.71, Rahu: 1.05, Ketu: 1.05, Lagna: -0.85 };
+// Thirukanitham = Lahiri (Chitrapaksha) ayanamsa; VAKYA approximates by subtracting ~1.45°.
+export function ayanamsaFor(jd: number, mode: PanchangamMode) {
+  return mode === 'VAKYA' ? norm360(lahiriAyanamsa(jd) - 1.45) : lahiriAyanamsa(jd);
+}
 
 // Geocentric apparent ecliptic longitudes (tropical, of-date) via astronomy-engine:
 // VSOP87-based planetary theory + dedicated lunar theory — arcminute-grade across 1900-2100.
@@ -49,30 +50,28 @@ export function tropicalLongitudes(jd: number): Record<string, number> {
   out.Ketu = norm360(out.Rahu + 180);
   return out;
 }
-function meanNode(jd: number) { const T = (jd - 2451545.0) / 36525; return norm360(125.04452 - 1934.136261 * T + 0.0020708 * T * T + T * T * T / 450000); }
+function meanNode(jd: number) { const T = (jd - 2451545.0) / 36525; return norm360(125.04452 - 1934.136261 * T + 0.0020708 * T * T); }
 export function siderealLongitudes(jd: number, mode: PanchangamMode) {
-  const trop = tropicalLongitudes(jd); const ayan = lahiriAyanamsa(jd);
+  const trop = tropicalLongitudes(jd); const ayan = ayanamsaFor(jd, mode);
   const out: Record<string, number> = {};
-  for (const k of Object.keys(trop)) {
-    let v = norm360(trop[k] - ayan);
-    if (mode === 'VAKYA') v = norm360(v + (VAKYA_OFFSET[k] ?? 0));
-    out[k] = v;
-  }
+  for (const k of Object.keys(trop)) out[k] = norm360(trop[k] - ayan);
   return { longitudes: out, ayanamsa: ayan, tropical: trop };
 }
 export function lagnaSidereal(jd: number, lat: number, lonEast: number, mode: PanchangamMode) {
   const T = (jd - 2451545.0) / 36525;
-  let gmst = 280.46061837 + 360.98564736629 * (jd - 2451545) + 0.000387933 * T * T - T * T * T / 38710000;
-  gmst = norm360(gmst);
-  const lst = norm360(gmst + lonEast);
-  const eps = 23.439291 - 0.0130042 * T - 0.00000164 * T * T;
-  // Standard ascendant: atan2(cos θ, -(sin θ·cos ε + tan φ·sin ε)); the previous
-  // sign-negated pair returned the DESCENDANT (lagna + 180°) — six signs off.
-  const y = cos(lst);
-  const x = -(sin(lst) * cos(eps) + tan(lat) * sin(eps));
-  let sid = norm360(atan2d(y, x) - lahiriAyanamsa(jd));
-  if (mode === 'VAKYA') sid = norm360(sid + VAKYA_OFFSET.Lagna);
-  return { lagna: sid, lst, gmst, eps };
+  // Greenwich Apparent Sidereal Time (hours) from astronomy-engine, then RAMC in degrees.
+  const gastHours = SiderealTime(jdToDate(jd));
+  const gmst = norm360(gastHours * 15);
+  const ramcDeg = norm360(gastHours * 15 + lonEast);
+  const epsRad = (23.4392911 - 0.0130042 * T) * D2R;
+  const latRad = lat * D2R;
+  const ramcRad = ramcDeg * D2R;
+  // Quadrant-safe ascendant: atan2(cos RAMC, -(sin RAMC·cos ε + tan φ·sin ε)).
+  const y = Math.cos(ramcRad);
+  const x = -(Math.sin(ramcRad) * Math.cos(epsRad) + Math.tan(latRad) * Math.sin(epsRad));
+  const tropicalAsc = norm360(Math.atan2(y, x) * R2D);
+  const sid = norm360(tropicalAsc - ayanamsaFor(jd, mode));
+  return { lagna: sid, lst: ramcDeg, gmst, eps: epsRad * R2D };
 }
 
 // ---------- Classical data ----------
@@ -550,8 +549,8 @@ export function computeDossier(profile: BirthProfile, transitDate: string): Doss
   const moonRasi = Math.floor(longitudes.Moon / 30);
   const moonNak = nakshatraOf(longitudes.Moon);
   const d10LagnaRasi = dasamsaRasi(lagna);
-  const jd1 = jd + 1;
-  const next = siderealLongitudes(jd1, profile.panchangamMode).longitudes;
+  const next = siderealLongitudes(jd + 1 / 24, profile.panchangamMode).longitudes; // +1h probe (retrograde rule)
+  const nextDay = siderealLongitudes(jd + 1, profile.panchangamMode).longitudes;
   const sunLon = longitudes.Sun;
   const isDay = hh >= 6 && hh < 18;
   // Moon phase: elongation from Sun (waxing 0..180)
@@ -562,8 +561,9 @@ export function computeDossier(profile: BirthProfile, transitDate: string): Doss
   const grahas: GrahaEval[] = GRAHA_ORDER.map((id) => {
     const lon = longitudes[id]; const rasi = Math.floor(lon / 30); const deg = degInRasi(lon);
     const nak = nakshatraOf(lon); const d9 = navamsaRasi(lon); const d10 = dasamsaRasi(lon);
-    const vel = norm180(next[id] - lon);
-    const retro = (id !== 'Sun' && id !== 'Moon' && id !== 'Rahu' && id !== 'Ketu') ? vel < 0 : (id === 'Rahu' || id === 'Ketu');
+    const vel1h = norm180(next[id] - lon);
+    const vel = norm180(nextDay[id] - lon);
+    const retro = (id !== 'Sun' && id !== 'Moon' && id !== 'Rahu' && id !== 'Ketu') ? vel1h < 0 : (id === 'Rahu' || id === 'Ketu');
     const ang = Math.abs(norm180(lon - sunLon));
     const orb = COMBUST_ORB[id] ?? 0;
     const combust = id !== 'Sun' && orb > 0 && ang <= orb;
