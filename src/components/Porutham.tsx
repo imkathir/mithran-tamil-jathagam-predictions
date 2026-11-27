@@ -100,9 +100,9 @@ function ChartColumn({ title, d }: { title: string; d: Dossier }) {
       <SIChart
         grid={d.rasiGrid} grahaMap={grahaMap}
         title={`${title} — ${t('rasiChart')}`}
-        meta={`${t('lagna')}: ${pick(RASI[d.lagnaRasi], lang)} · ${pick(NAKSHATRA[d.lagnaNak.idx], lang)}`}
+        meta={`${t('lagna')}: ${pick(RASI[d.lagnaRasi], lang)} ${(d.lagnaLon % 30).toFixed(1)}° · ${t('janmaNak')}: ${pick(NAKSHATRA[moon.nakIdx], lang)} ${moon.pada}`}
         centerTop={title}
-        centerLines={[`${d.profile.name} · ${d.profile.date} ${d.profile.time}`, `${pick(RASI[Math.floor(moon.lon / 30)], lang)} · ${pick(NAKSHATRA[moon.nakIdx], lang)}`]}
+        centerLines={[`${d.profile.name} · ${d.profile.date} ${d.profile.time}`, `${pick(RASI[moon.rasi], lang)} · ${pick(NAKSHATRA[moon.nakIdx], lang)} ${moon.pada}`]}
         markRasi={d.lagnaRasi} badges={badges} tooltips={{}}
       />
       <div style={{ height: 18 }} />

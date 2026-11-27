@@ -108,7 +108,8 @@ export default function ChartPair({ d, selId, onSel }: { d: Dossier; selId: stri
   const [showAll, setShowAll] = useState(true);
   const grahaMap = Object.fromEntries(d.grahas.map((g) => [g.id, g])) as Record<string, GrahaEval>;
   const moon = grahaMap.Moon;
-  const nak: Bilingual = NAKSHATRA[d.lagnaNak.idx];
+  const janmaNak: Bilingual = NAKSHATRA[moon.nakIdx];
+  const janmaRasi = RASI[moon.rasi];
   const activeId = hoverId ?? selId;
 
   // badges for D1
@@ -191,10 +192,11 @@ export default function ChartPair({ d, selId, onSel }: { d: Dossier; selId: stri
             return cells;
           })()}
           <div className="si-center">
-            <div className="t">{`${t('lagna')}: ${pick(RASI[d.lagnaRasi], lang)}`}</div>
+            <div className="t">{`${t('lagna')}: ${pick(RASI[d.lagnaRasi], lang)} ${(d.lagnaLon % 30).toFixed(1)}°`}</div>
             <div className="s">{`${d.profile.name} · ${d.profile.date} ${d.profile.time}`}</div>
             <div className="s">{`${d.profile.placeName} · ${d.profile.latitude.toFixed(4)}°N ${d.profile.longitude.toFixed(4)}°E`}</div>
-            <div className="s">{`${t('janmaNak')}: ${pick(nak, lang)} ${d.lagnaNak.pada}`}</div>
+            <div className="s">{`${t('janmaRasi')}: ${pick(janmaRasi, lang)}`}</div>
+            <div className="s">{`${t('janmaNak')}: ${pick(janmaNak, lang)} ${moon.pada}`}</div>
           </div>
         </div>
 
@@ -220,8 +222,8 @@ export default function ChartPair({ d, selId, onSel }: { d: Dossier; selId: stri
         centerTop="D9 · Navamsa"
         centerLines={[
           `${t('lagna')}: ${pick(RASI[navamsaRasi(d.lagnaLon)], lang)}`,
-          `${t('janmaRasi')}: ${pick(RASI[Math.floor(moon.lon / 30)], lang)}`,
-          `${t('janmaNak')}: ${pick(NAKSHATRA[moon.nakIdx], lang)}`,
+          `${t('janmaRasi')}: ${pick(RASI[moon.rasi], lang)}`,
+          `${t('janmaNak')}: ${pick(NAKSHATRA[moon.nakIdx], lang)} ${moon.pada}`,
         ]}
         markRasi={navamsaRasi(d.lagnaLon)}
         badges={{}}
