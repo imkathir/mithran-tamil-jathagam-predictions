@@ -4,7 +4,8 @@ import type { Dossier, Bilingual, GrahaEval } from '../engine';
 import { RASI, NAKSHATRA, OWN, EXALT, DEBIL, fmtDate, navamsaRasi } from '../engine';
 import { canvasToIndexedPngDataUrl } from '../png';
 import type { TimelineRow } from '../timeline';
-import type { PoruthamResult } from '../porutham';
+import type { PoruthamResult, DbPeriodRow } from '../porutham';
+import { IMPACT_LABEL, CELL_LABEL, fmtRange } from '../porutham';
 import { buildDasa36 } from '../dasa36';
 import {
   RASI_REF, NAKSHATRA_REF, BHAVA_REF, DASA_YEARS, PLANET_NAMES,
@@ -332,6 +333,28 @@ function doshaText(hasDosha: boolean, cancelled: boolean, dl: DocLang): string {
   return base + (cancelled ? L(' (குரு/சந்திர ராசி ரத்து)', ' (cancelled by Guru/Moon-rasi rule)', dl) : '');
 }
 
+function d20Table(title: string, rows: DbPeriodRow[], dl: DocLang): string {
+  const body = rows.map((r) => `<tr>
+    <td class="n pk">${esc(fmtRange(r.start, r.end, dl === 'ta' ? 'ta' : 'en'))}</td>
+    <td class="pk">${esc(pn(r.maha, dl))} – ${esc(pn(r.bhukti, dl))}</td>
+    <td>${esc(BI(CELL_LABEL[r.family.level], dl))}<br/><span class="cell-note">${esc(BI(r.family.note, dl))}</span></td>
+    <td>${esc(BI(CELL_LABEL[r.spouse.level], dl))}<br/><span class="cell-note">${r.spouse.notes.map((n) => esc(BI(n, dl))).join(' · ')}</span></td>
+    <td class="cell-note">${r.protection.length ? r.protection.map((n) => esc(BI(n, dl))).join(' · ') : '—'}</td>
+  </tr>`).join('');
+  return `
+    <div class="p-h3">${title}</div>
+    <table class="p-tbl d20-tbl">
+      <thead><tr>
+        <th>${L('காலம் (Period)', 'Period', dl)}</th>
+        <th>${L('தசை - புக்தி', 'Dasa-Bhukti', dl)}</th>
+        <th>${L('குடும்ப தாக்கம்', 'Family Impact', dl)}</th>
+        <th>${L('மனைவி / கணவர் தாக்கம்', 'Spouse Impact', dl)}</th>
+        <th>${L('விதிவிலக்கு / பாதுகாப்பு', 'Protection', dl)}</th>
+      </tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
 export function sectionMarriage(pd: PdfPoruthamData, dl: DocLang): Atom[] {
   const r = pd.result;
   const rowsA = r.moduleA.rows.map((x) => `<tr><td class="pk">${esc(BI(x.name, dl))}</td><td>${esc(BI(x.status, dl))}</td><td class="n c">${x.points}/${x.max}</td><td>${esc(BI(x.detail, dl))}</td></tr>`).join('');
@@ -356,13 +379,16 @@ export function sectionMarriage(pd: PdfPoruthamData, dl: DocLang): Atom[] {
     </p></div>
   `;
   const html2 = `
-    <div class="p-h3">${L('மாட்யூல் C — சர்ப்ப தோஷம்', 'Module C — Sarpa Dosha', dl)}</div>
-    <div class="p-body"><p>${L('மணமகள்', 'Bride', dl)}: ${esc(BI(r.moduleC.brideSarpa, dl))} · ${L('மணமகன்', 'Groom', dl)}: ${esc(BI(r.moduleC.groomSarpa, dl))}<br/>${esc(BI(r.moduleC.verdict, dl))} (${r.moduleC.score}/10)</p></div>
-    <div class="p-h3">${L('மாட்யூல் D — தசா சந்தி & பாதுகாப்பு ஜன்னல்கள்', 'Module D — Dasa Sandhi Windows', dl)}</div>
-    <table class="p-tbl">
-      <thead><tr><th>${L('தேதி', 'Date', dl)}</th><th>${L('வகை', 'Kind', dl)}</th><th>${L('விளக்கம்', 'Detail', dl)}</th></tr></thead>
-      <tbody>${r.moduleD.windows.map((w) => `<tr><td class="n pk">${esc(w.date)}</td><td>${esc(BI({ ta: w.kind === 'sandhi' ? 'தசா சந்தி' : w.kind === 'sameMaha' ? 'ஒரே மகாதசை' : w.kind === 'sameMahaBhukti' ? 'மகாதசை-புக்தி' : 'பாதுகாப்பு', en: w.kind }, dl))}</td><td>${esc(BI(w.detail, dl))}</td></tr>`).join('')}</tbody>
-    </table>
+    <div class="p-h3">${L('மாட்யூல் C — ராகு-கேது சர்ப்ப தோஷம் (லக்ன அடிப்படை)', 'Module C — Rahu-Ketu Sarpa Dosha (From Lagna)', dl)}</div>
+    <div class="p-body"><p>${L('மணமகள்', 'Bride', dl)}: ${esc(BI(r.moduleC.brideSarpa, dl))}<br/>${L('மணமகன்', 'Groom', dl)}: ${esc(BI(r.moduleC.groomSarpa, dl))}<br/>${esc(BI(r.moduleC.verdict, dl))} (${r.moduleC.score}/100)</p></div>
+    <div class="p-h3">${L(`மாட்யூல் D — அடுத்த 20 ஆண்டு தசா-புக்தி குடும்ப & வாழ்க்கைத் துணை பாதுகாப்பு ஆய்வு (${r.moduleD.fromYear} – ${r.moduleD.toYear})`, `Module D — 20-Year Dasa-Bhukti Family & Spouse Impact (${r.moduleD.fromYear} – ${r.moduleD.toYear})`, dl)}</div>
+    <div class="p-sub">${L('ஆண் ஜாதகம்', 'Groom', dl)} — ${L('குடும்ப நலன்', 'Family', dl)}: ${esc(BI(IMPACT_LABEL[r.moduleD.groom.familyBadge], dl))} · ${L('மனைவி நலன்', 'Wife', dl)}: ${esc(BI(IMPACT_LABEL[r.moduleD.groom.spouseBadge], dl))} | ${L('பெண் ஜாதகம்', 'Bride', dl)} — ${L('குடும்ப நலன்', 'Family', dl)}: ${esc(BI(IMPACT_LABEL[r.moduleD.bride.familyBadge], dl))} · ${L('கணவர் நலன்', 'Husband', dl)}: ${esc(BI(IMPACT_LABEL[r.moduleD.bride.spouseBadge], dl))}</div>
+    ${d20Table(L('ஆண் ஜாதகம் — தசா-புக்தி காலவரிசை', 'Groom — Dasa-Bhukti Timeline', dl), r.moduleD.groom.rows, dl)}
+    ${d20Table(L('பெண் ஜாதகம் — தசா-புக்தி காலவரிசை', 'Bride — Dasa-Bhukti Timeline', dl), r.moduleD.bride.rows, dl)}
+    <div class="p-h3">${L('உயர் ஆபத்து & பாதுகாப்பு சாளரங்கள்', 'High-Risk vs Protected Overlap Windows', dl)}</div>
+    ${r.moduleD.overlaps.length
+      ? `<table class="p-tbl"><thead><tr><th>${L('காலம்', 'Period', dl)}</th><th>${L('வகை', 'Kind', dl)}</th><th>${L('விளக்கம்', 'Detail', dl)}</th></tr></thead><tbody>${r.moduleD.overlaps.map((w) => `<tr><td class="n pk">${esc(fmtRange(w.start, w.end, dl === 'ta' ? 'ta' : 'en'))}</td><td>${w.kind === 'protected' ? esc(L('பாதுகாப்பு சாளரம்', 'Protected window', dl)) : esc(L('அதிக ஆபத்து சாளரம்', 'High-risk window', dl))}</td><td>${esc(BI(w.detail, dl))}</td></tr>`).join('')}</tbody></table>`
+      : `<div class="p-note">${L('குறிப்பிடத்தக்க சாளரங்கள் இல்லை.', 'No notable windows.', dl)}</div>`}
     <div class="p-note">${esc(BI(r.moduleD.summary, dl))}</div>
     <div class="p-h3">${L('மாட்யூல் E — நவீன பொருத்தங்கள்', 'Module E — Adaptive (Modern) Poruthams', dl)}</div>
     <table class="p-tbl">

@@ -694,3 +694,30 @@ button, .planet-pill, .m36-cell, .dasa-seg, .modal-check {
   .si-center .t { font-size: 10.5px; }
   .si-center .s { font-size: 8.5px; }
 }
+
+/* ---- Marriage: summary bar + 20-year dasa-bhukti tables ---- */
+.sum-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--paper);font-size:13.5px;color:var(--ink)}
+.sum-bar .sb-item b{color:var(--vermilion);font-weight:700;margin-right:4px}
+.sum-bar .sb-sep{color:var(--faint)}
+.sum-bar .btn-reset{margin-left:auto;padding:8px 14px;min-height:38px;border:1px solid var(--border);border-radius:10px;background:#fff;font-weight:600;font-size:12.5px;cursor:pointer}
+.sum-bar .btn-reset:active{background:var(--paper)}
+.d20-badges{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+.badge-card{border:1px solid var(--border);border-radius:12px;padding:12px;background:var(--paper)}
+.badge-card .bc-title{font-size:12.5px;font-weight:700;margin-bottom:8px;color:var(--ink)}
+.badge-card .bc-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0}
+.badge-card .bc-label{font-size:12px;color:var(--faint)}
+.db-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:8px;border:1px solid var(--border);border-radius:12px}
+.db-table{width:100%;min-width:760px;border-collapse:collapse;font-size:12px}
+.db-table th,.db-table td{border-bottom:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top;white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+.db-table th{font-size:11px;font-weight:700;color:var(--faint);background:var(--paper);position:sticky;top:0}
+.db-table tr:last-child td{border-bottom:none}
+.db-table .cell-note{display:block;margin-top:3px;font-size:10.5px;color:var(--faint);white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+@media (max-width: 720px){
+  .d20-badges{grid-template-columns:1fr}
+  .sum-bar{font-size:12.5px}
+  .sum-bar .btn-reset{width:100%;margin-left:0}
+  .db-table{min-width:680px}
+}
+/* PDF: no truncation in 20-year tables */
+.p-tbl.d20-tbl td,.p-tbl.d20-tbl th{white-space:normal;word-break:break-word;overflow-wrap:anywhere}
+.p-tbl.d20-tbl td .cell-note{font-size:7.5px;color:#555}

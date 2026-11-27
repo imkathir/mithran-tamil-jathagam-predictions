@@ -212,7 +212,7 @@ function Shell() {
               <section className="section">
                 <div className="section-head">
                   <h2>{pick(langStr.navPorutham, lang)}</h2>
-                  <span className="ref">10 poruthams · Kuja · Dasa sandhi</span>
+                  <span className="ref">10 poruthams · Kuja · Sarpa · 20-yr Dasa impact</span>
                 </div>
                 <Porutham onResult={setPoruthamData} />
               </section>

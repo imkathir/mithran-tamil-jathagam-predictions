@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { computeDossier, type BirthProfile, type Dossier, type PanchangamMode, RASI, NAKSHATRA } from '../engine';
-import type { PoruthamRow, SandhiWindow } from '../porutham';
-import { computePorutham } from '../porutham';
+import { computeDossier, type BirthProfile, type Dossier, type PanchangamMode, RASI, NAKSHATRA, GRAHA_INFO } from '../engine';
+import type { PoruthamRow, DbPeriodRow, OverlapWindow, ImpactLevel } from '../porutham';
+import { computePorutham, IMPACT_LABEL, CELL_LABEL, fmtRange } from '../porutham';
 import type { PdfPoruthamData } from './PdfDossier';
 import { GAZETTEER } from '../gazetteer';
 import { useLang, useT, pick } from '../i18n';
@@ -13,13 +13,18 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 interface PForm extends BirthProfile {}
 
 const BRIDE_INIT: PForm = {
-  name: 'Anitha', date: '2007-08-22', time: '11:06', placeName: 'Udumalpet, Tamil Nadu',
-  latitude: 10.5881, longitude: 77.2478, timezoneOffsetMinutes: 330, panchangamMode: 'THIRUKANITHAM',
-};
-const GROOM_INIT: PForm = {
-  name: 'Karthik', date: '2005-01-19', time: '06:45', placeName: 'Coimbatore, Tamil Nadu',
+  name: 'பாரதி', date: '2002-03-12', time: '20:20', placeName: 'Coimbatore, Tamil Nadu',
   latitude: 11.0168, longitude: 76.9558, timezoneOffsetMinutes: 330, panchangamMode: 'THIRUKANITHAM',
 };
+const GROOM_INIT: PForm = {
+  name: 'கதர்', date: '1998-05-04', time: '16:36', placeName: 'Udumalpet, Tamil Nadu',
+  latitude: 10.5881, longitude: 77.2478, timezoneOffsetMinutes: 330, panchangamMode: 'THIRUKANITHAM',
+};
+
+function rasiNakLine(d: Dossier, lang: 'ta' | 'en') {
+  const moon = d.grahas.find((g) => g.id === 'Moon')!;
+  return `${pick(RASI[moon.rasi], lang)} · ${pick(NAKSHATRA[moon.nakIdx], lang)}-${moon.pada}`;
+}
 
 function CompactForm({ label, form, setForm }: { label: string; form: PForm; setForm: (f: PForm) => void }) {
   const lang = useLang();
@@ -134,16 +139,60 @@ function ModuleRows({ rows }: { rows: PoruthamRow[] }) {
   );
 }
 
-function WindowList({ windows }: { windows: SandhiWindow[] }) {
+function ImpactBadge({ level }: { level: ImpactLevel }) {
   const lang = useLang();
-  if (!windows.length) return <div className="pr-detail">{lang === 'ta' ? 'குறிப்பிடத்தக்க சந்திப்புகள் இல்லை.' : 'No notable windows.'}</div>;
+  return <span className={`pr-status nature-${level === 'low' ? 'benefic' : level === 'moderate' ? 'neutral' : 'malefic'}`}>{pick(IMPACT_LABEL[level], lang)}</span>;
+}
+
+function D20Table({ title, rows }: { title: string; rows: DbPeriodRow[] }) {
+  const lang = useLang();
+  return (
+    <div>
+      <h4 className="pm-col-title">{title}</h4>
+      <div className="db-scroll">
+        <table className="db-table">
+          <thead>
+            <tr>
+              <th>{lang === 'ta' ? 'காலம் (Period)' : 'Period'}</th>
+              <th>{lang === 'ta' ? 'தசை - புக்தி (Dasa-Bhukti)' : 'Dasa-Bhukti'}</th>
+              <th>{lang === 'ta' ? 'குடும்ப தாக்கம் (Family Impact)' : 'Family Impact'}</th>
+              <th>{lang === 'ta' ? 'மனைவி / கணவர் தாக்கம் (Spouse Impact)' : 'Spouse Impact'}</th>
+              <th>{lang === 'ta' ? 'விதிவிலக்கு / பாதுகாப்பு (Protection & Exceptions)' : 'Protection & Exceptions'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td className="num pk">{fmtRange(r.start, r.end, lang)}</td>
+                <td className="pk">{pick(GRAHA_INFO[r.maha], lang)} – {pick(GRAHA_INFO[r.bhukti], lang)}</td>
+                <td>
+                  <span className={`pr-status nature-${r.family.level === 'low' ? 'benefic' : r.family.level === 'moderate' ? 'neutral' : 'malefic'}`}>{pick(CELL_LABEL[r.family.level], lang)}</span>
+                  <div className="cell-note">{pick(r.family.note, lang)}</div>
+                </td>
+                <td>
+                  <span className={`pr-status nature-${r.spouse.level === 'low' ? 'benefic' : r.spouse.level === 'moderate' ? 'neutral' : 'malefic'}`}>{pick(CELL_LABEL[r.spouse.level], lang)}</span>
+                  <div className="cell-note">{r.spouse.notes.map((n) => pick(n, lang)).join(' · ')}</div>
+                </td>
+                <td className="cell-note">{r.protection.length ? r.protection.map((n) => pick(n, lang)).join(' · ') : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function WindowList({ windows }: { windows: OverlapWindow[] }) {
+  const lang = useLang();
+  if (!windows.length) return <div className="pr-detail">{lang === 'ta' ? 'குறிப்பிடத்தக்க சாளரங்கள் இல்லை.' : 'No notable windows.'}</div>;
   return (
     <div>
       {windows.map((w, i) => (
         <div key={i} className="porutham-row">
-          <span className="pr-name num">{w.date}</span>
-          <span className={`pr-status ${w.kind === 'protective' ? 'nature-benefic' : w.kind === 'sandhi' ? 'nature-neutral' : 'nature-malefic'}`}>
-            {w.kind === 'sandhi' ? (lang === 'ta' ? 'தசா சந்திப்பு' : 'Dasa Sandhi') : w.kind === 'protective' ? (lang === 'ta' ? 'பாதுகாப்பு' : 'Protective') : (lang === 'ta' ? 'ஒரே தசா' : 'Same Dasa')}
+          <span className="pr-name num">{fmtRange(w.start, w.end, lang)}</span>
+          <span className={`pr-status ${w.kind === 'protected' ? 'nature-benefic' : 'nature-malefic'}`}>
+            {w.kind === 'protected' ? (lang === 'ta' ? 'பாதுகாப்பு சாளரம்' : 'Protected window') : (lang === 'ta' ? 'அதிக ஆபத்து சாளரம்' : 'High-risk window')}
           </span>
           <span className="pr-detail" style={{ gridColumn: '3 / -1' }}>{pick(w.detail, lang)}</span>
         </div>
@@ -164,11 +213,14 @@ export default function Porutham({ onResult }: { onResult?: (d: PdfPoruthamData)
   const [brideForm, setBrideForm] = useState<PForm>(BRIDE_INIT);
   const [groomForm, setGroomForm] = useState<PForm>(GROOM_INIT);
 
+  // Calculation runs automatically on load and on every change (incl. Reset)
   const { bride, groom, result } = useMemo(() => {
     const b = computeDossier(brideForm, todayISO());
     const g = computeDossier(groomForm, todayISO());
     return { bride: b, groom: g, result: computePorutham(b, g, new Date()) };
   }, [brideForm, groomForm]);
+
+  const resetAll = () => { setBrideForm(BRIDE_INIT); setGroomForm(GROOM_INIT); };
 
   useEffect(() => {
     onResult?.({ bride: brideForm.name, groom: groomForm.name, result });
@@ -180,11 +232,21 @@ export default function Porutham({ onResult }: { onResult?: (d: PdfPoruthamData)
       <div className="panel">
         <div className="panel-title">
           <span>{t('poruthamTitle')}</span>
-          <span className="meta">{lang === 'ta' ? 'தசப் பொருத்தம் + தோஷ ஆய்வு + தசா ஒப்பீடு' : 'Dasa Porutham + Dosha study + Dasa comparison'}</span>
+          <span className="meta">{lang === 'ta' ? '10 பொருத்தம் + தோஷ ஆய்வு + 20 ஆண்டு தசா-புக்தி தாக்க ஆய்வு' : '10 Poruthams + Dosha study + 20-Year Dasa-Bhukti impact'}</span>
         </div>
         <div className="porutham-forms">
           <CompactForm label={t('brideLabel')} form={brideForm} setForm={setBrideForm} />
           <CompactForm label={t('groomLabel')} form={groomForm} setForm={setGroomForm} />
+        </div>
+        <div className="sum-bar">
+          <span className="sb-item">
+            <b>{lang === 'ta' ? 'பெண்:' : 'Bride:'}</b> {rasiNakLine(bride, lang)}
+          </span>
+          <span className="sb-sep">|</span>
+          <span className="sb-item">
+            <b>{lang === 'ta' ? 'ஆண்:' : 'Groom:'}</b> {rasiNakLine(groom, lang)}
+          </span>
+          <button className="btn-reset" onClick={resetAll}>{lang === 'ta' ? 'இயல்புநிலை' : 'Reset'}</button>
         </div>
         <div className="porutham-charts">
           <ChartColumn title={t('brideLabel')} d={bride} />
@@ -254,12 +316,51 @@ export default function Porutham({ onResult }: { onResult?: (d: PdfPoruthamData)
       </div>
 
       <div className="panel">
-        <h3>{lang === 'ta' ? 'ஈ. தசா சந்திப்பு & தசாபுத்தி ஒப்பீடு (அடுத்த 25 ஆண்டுகள்)' : 'D. Dasa Sandhi & Dasa-Bhukti Comparison (next 25 years)'}</h3>
-        <div className="panel-title" style={{ marginTop: 6 }}>
+        <h3>
+          {lang === 'ta'
+            ? `ஈ. அடுத்த 20 ஆண்டு தசா-புக்தி குடும்ப & வாழ்க்கைத் துணை பாதுகாப்பு ஆய்வு (${result.moduleD.fromYear} – ${result.moduleD.toYear})`
+            : `D. 20-Year Dasa-Bhukti Family & Spouse Impact Analysis (${result.moduleD.fromYear} – ${result.moduleD.toYear})`}
+        </h3>
+        <div className="d20-badges">
+          <div className="badge-card">
+            <div className="bc-title">{lang === 'ta' ? 'ஆண் ஜாதக 20-ஆண்டு தசா-புக்தி பலன் (Groom\'s 20-Yr Impact)' : "Groom's 20-Yr Dasa-Bhukti Impact"}</div>
+            <div className="bc-row">
+              <span className="bc-label">{lang === 'ta' ? 'குடும்ப நலன் (Family)' : 'Family'}</span>
+              <ImpactBadge level={result.moduleD.groom.familyBadge} />
+            </div>
+            <div className="bc-row">
+              <span className="bc-label">{lang === 'ta' ? 'மனைவி நலன் (Wife)' : 'Wife'}</span>
+              <ImpactBadge level={result.moduleD.groom.spouseBadge} />
+            </div>
+          </div>
+          <div className="badge-card">
+            <div className="bc-title">{lang === 'ta' ? 'பெண் ஜாதக 20-ஆண்டு தசா-புக்தி பலன் (Bride\'s 20-Yr Impact)' : "Bride's 20-Yr Dasa-Bhukti Impact"}</div>
+            <div className="bc-row">
+              <span className="bc-label">{lang === 'ta' ? 'குடும்ப நலன் (Family)' : 'Family'}</span>
+              <ImpactBadge level={result.moduleD.bride.familyBadge} />
+            </div>
+            <div className="bc-row">
+              <span className="bc-label">{lang === 'ta' ? 'கணவர் நலன் (Husband)' : 'Husband'}</span>
+              <ImpactBadge level={result.moduleD.bride.spouseBadge} />
+            </div>
+          </div>
+        </div>
+        <div className="panel-title" style={{ marginTop: 10 }}>
           <span className="meta">{pick(result.moduleD.summary, lang)}</span>
           <span className="meta num">{result.moduleD.score}/100</span>
         </div>
-        <WindowList windows={result.moduleD.windows} />
+        <D20Table
+          title={lang === 'ta' ? `ஆண் ஜாதகம் — தசா-புக்தி காலவரிசை (${result.moduleD.fromYear} – ${result.moduleD.toYear})` : `Groom — Dasa-Bhukti Timeline (${result.moduleD.fromYear} – ${result.moduleD.toYear})`}
+          rows={result.moduleD.groom.rows}
+        />
+        <div style={{ height: 16 }} />
+        <D20Table
+          title={lang === 'ta' ? `பெண் ஜாதகம் — தசா-புக்தி காலவரிசை (${result.moduleD.fromYear} – ${result.moduleD.toYear})` : `Bride — Dasa-Bhukti Timeline (${result.moduleD.fromYear} – ${result.moduleD.toYear})`}
+          rows={result.moduleD.bride.rows}
+        />
+        <div style={{ height: 16 }} />
+        <h4 className="pm-col-title">{lang === 'ta' ? 'உயர் ஆபத்து & பாதுகாப்பு சாளரங்கள் (High-Risk vs Protected Overlaps)' : 'High-Risk vs Protected Overlap Windows'}</h4>
+        <WindowList windows={result.moduleD.overlaps} />
       </div>
 
       <div className="panel">

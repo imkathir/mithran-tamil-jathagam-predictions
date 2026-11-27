@@ -1,9 +1,9 @@
 // Marriage Compatibility & Jothidam Porutham engine
-// Modules A–F: 10 Nakshatra Poruthams, Kuja Dosha + exceptions, Rahu-Ketu dosha,
-// Dasa Sandhi / collision timeline (25 years), cross-chart Bhava & Graha analysis, final verdict.
+// Modules A–F: 10 Nakshatra Poruthams, Kuja Dosha + exceptions, Rahu-Ketu Sarpa Dosha (strictly from Lagna),
+// 20-Year Dasa-Bhukti Family & Spouse impact, cross-chart Bhava & Graha analysis, final verdict.
 import type { Dossier, Bilingual } from './engine';
-import { GRAHA_INFO, RASI, NAKSHATRA, houseFrom, FRIENDS, ENEMIES, OWN, RASI_LORDS, NATURAL_MALEFIC } from './engine';
-import { YR, fmtLong } from './timeline';
+import { GRAHA_INFO, RASI, NAKSHATRA, houseFrom, FRIENDS, ENEMIES, OWN, RASI_LORDS } from './engine';
+import { YR } from './timeline';
 
 const gm = (d: Dossier, id: string) => d.grahas.find((g) => g.id === id)!;
 
@@ -49,12 +49,35 @@ export interface DoshaInfo {
   positions: { from: string; house: number }[];
   exceptions: Bilingual[];
 }
-export interface SandhiWindow { date: string; kind: 'sandhi' | 'sameMaha' | 'sameMahaBhukti' | 'protective'; detail: Bilingual }
+export interface SarpaInfo {
+  has: boolean;
+  placements: { planet: string; house: number }[];
+  axis: '1-7' | '2-8' | null;
+  jupiterRelief: boolean;
+  beneficSignRelief: boolean;
+}
+export type ImpactLevel = 'low' | 'moderate' | 'high';
+export interface DbPeriodRow {
+  start: Date; end: Date;
+  maha: string; bhukti: string;
+  family: { level: ImpactLevel; note: Bilingual };
+  spouse: { level: ImpactLevel; notes: Bilingual[] };
+  protection: Bilingual[];
+  strong: boolean;
+}
+export interface D20Chart { rows: DbPeriodRow[]; familyBadge: ImpactLevel; spouseBadge: ImpactLevel }
+export interface OverlapWindow { start: Date; end: Date; kind: 'highRisk' | 'protected'; detail: Bilingual }
+export interface ModuleD20 {
+  fromYear: number; toYear: number;
+  groom: D20Chart; bride: D20Chart;
+  overlaps: OverlapWindow[];
+  score: number; summary: Bilingual;
+}
 export interface PoruthamResult {
   moduleA: { rows: PoruthamRow[]; score: number };
   moduleB: { bride: DoshaInfo; groom: DoshaInfo; verdict: Bilingual; verdictKey: string; score: number };
-  moduleC: { brideSarpa: Bilingual; groomSarpa: Bilingual; verdict: Bilingual; score: number };
-  moduleD: { windows: SandhiWindow[]; score: number; summary: Bilingual };
+  moduleC: { brideSarpa: Bilingual; groomSarpa: Bilingual; brideInfo: SarpaInfo; groomInfo: SarpaInfo; verdict: Bilingual; score: number };
+  moduleD: ModuleD20;
   moduleE: { rows: PoruthamRow[]; score: number };
   moduleF: { total: number; verdict: Bilingual; verdictKey: string; strengths: Bilingual[]; cautions: Bilingual[]; outlook: Bilingual };
 }
@@ -171,98 +194,310 @@ function kujaDosha(d: Dossier): DoshaInfo {
   return { hasDosha, cancelled: hasDosha && exceptions.length > 0, positions, exceptions };
 }
 
-// ---------- Module C: Rahu-Ketu (Sarpa Dosha) ----------
-function sarpaDosha(d: Dossier): { has: boolean; axes: string[]; jupiterMitigates: boolean } {
-  const moon = gm(d, 'Moon'), rahu = gm(d, 'Rahu'), jup = gm(d, 'Jupiter');
-  const axes: string[] = [];
-  const check = (base: number, from: string) => {
-    const h = houseFrom(base, rahu.rasi);
-    if (h === 1 || h === 7) axes.push(`${from} 1-7`);
-    if (h === 2 || h === 8) axes.push(`${from} 2-8`);
-  };
-  check(d.lagnaRasi, 'Lagna'); check(moon.rasi, 'Moon');
-  const mitigates = jup.aspectDetails.some((a) => a.targetRasi === rahu.rasi && !a.traditional) || jup.rasi === rahu.rasi;
-  return { has: axes.length > 0, axes, jupiterMitigates: mitigates };
+// ---------- Module C: Rahu-Ketu Sarpa Dosha — STRICTLY from Lagna ----------
+// Trigger: Rahu or Ketu in the 1st or 2nd (or their 7th/8th axis counterparts) from Lagna.
+// Cancellations: Jupiter aspect/conjunction on the axis, benefic sign placement, mutual balance.
+const SARPA_BENEFIC_RASI = [0, 1, 3, 5, 8, 11]; // Mesham, Rishabam, Kadagam, Kanni, Dhanusu, Meenam
+
+function sarpaDosha(d: Dossier): SarpaInfo {
+  const rahu = gm(d, 'Rahu'), ketu = gm(d, 'Ketu');
+  const placements: { planet: string; house: number }[] = [];
+  (['Rahu', 'Ketu'] as const).forEach((planet) => {
+    const h = houseFrom(d.lagnaRasi, gm(d, planet).rasi);
+    if (h === 1 || h === 2 || h === 7 || h === 8) placements.push({ planet, house: h });
+  });
+  const has = placements.length > 0;
+  const axis: '1-7' | '2-8' | null = !has ? null : placements.some((p) => p.house === 1 || p.house === 7) ? '1-7' : '2-8';
+  // Jupiter's classical 5th / 7th / 9th aspect or conjunction on Rahu or Ketu (the axis)
+  const jup = gm(d, 'Jupiter');
+  const jupiterRelief = has && ([rahu, ketu].some((n) =>
+    n.rasi === jup.rasi || n.aspectsReceived.some((a) => a.from === 'Jupiter' && [5, 7, 9].includes(a.num)),
+  ));
+  // Benefic sign placement of Rahu or Ketu
+  const beneficSignRelief = has && (SARPA_BENEFIC_RASI.includes(rahu.rasi) || SARPA_BENEFIC_RASI.includes(ketu.rasi));
+  return { has, placements, axis, jupiterRelief, beneficSignRelief };
 }
 
-// ---------- Module D: Dasa Sandhi & collisions (25 years) ----------
-function moduleD(bride: Dossier, groom: Dossier, now: Date): { windows: SandhiWindow[]; score: number; summary: Bilingual } {
-  const horizon = new Date(now.getTime() + 25 * YR);
-  const changes = (d: Dossier) => d.dasa.filter((p) => p.end > now && p.start < horizon).map((p) => ({ lord: p.lord, start: p.start, end: p.end }));
-  const bc = changes(bride), gc = changes(groom);
-  const windows: SandhiWindow[] = [];
-  let score = 72;
-
-  // Dasa Sandhi: both change mahadasa within 12 months
-  bc.forEach((b) => gc.forEach((g) => {
-    const gap = Math.abs(b.start.getTime() - g.start.getTime()) / (365.25 * 86400000);
-    if (gap <= 1 && b.start > now && g.start > now && b.start < horizon && g.start < horizon) {
-      windows.push({
-        date: fmtLong(b.start < g.start ? b.start : g.start, 'en'), kind: 'sandhi',
-        detail: {
-          ta: `தசா சந்திப்பு: ${fmtLong(b.start, 'ta')} (${GRAHA_INFO[b.lord].ta}) ↔ ${fmtLong(g.start, 'ta')} (${GRAHA_INFO[g.lord].ta}) — 12 மாதங்களுக்குள் இரு தசா மாற்றங்கள்`,
-          en: `Dasa Sandhi: ${fmtLong(b.start, 'en')} (${b.lord}) ↔ ${fmtLong(g.start, 'en')} (${g.lord}) — both change within 12 months`,
-        },
-      });
-      score -= 8;
-    }
-  }));
-
-  // Same mahadasa / same maha+bhukti collisions
-  const dusthanaLordIds = (d: Dossier) => {
-    const s = new Set<string>();
-    [6, 8, 12].forEach((h) => s.add(RASI_LORDS[(d.lagnaRasi + h - 1) % 12]));
-    return s;
-  };
-  const bd = dusthanaLordIds(bride), gd = dusthanaLordIds(groom);
-  bc.forEach((b) => gc.forEach((g) => {
-    if (b.lord !== g.lord) return;
-    const s = b.start > g.start ? b.start : g.start;
-    const e = b.end < g.end ? b.end : g.end;
-    if (e <= now || s >= horizon) return;
-    const risky = bd.has(b.lord) || gd.has(b.lord) || NATURAL_MALEFIC.includes(b.lord);
-    windows.push({
-      date: fmtLong(s, 'en'), kind: risky ? 'sameMaha' : 'sameMahaBhukti',
-      detail: {
-        ta: `ஒரே மகாதசா: ${GRAHA_INFO[b.lord].ta} (${fmtLong(s, 'ta')} – ${fmtLong(e, 'ta')})${risky ? ' — துஷ்டான/பாவ அதிபதி; கவன காலம்' : ''}`,
-        en: `Same Mahadasa: ${b.lord} (${fmtLong(s, 'en')} – ${fmtLong(e, 'en')})${risky ? ' — dusthana/malefic lord; careful window' : ''}`,
-      },
-    });
-    score -= risky ? 12 : 5;
-  }));
-
-  // Protective: one partner runs kendra/trikona-lord dasa while other's is challenging
-  const beneficLord = (d: Dossier, lord: string) => {
-    const owned = (OWN[lord] ?? []).map((r) => houseFrom(d.lagnaRasi, r));
-    return owned.some((h) => [1, 4, 5, 7, 9, 10].includes(h)) && !owned.some((h) => [6, 8, 12].includes(h));
-  };
-  bc.forEach((b) => gc.forEach((g) => {
-    const s = b.start > g.start ? b.start : g.start;
-    const e = b.end < g.end ? b.end : g.end;
-    if (e <= now || s >= horizon) return;
-    const bGood = beneficLord(bride, b.lord), gGood = beneficLord(groom, g.lord);
-    if (bGood !== gGood) {
-      const protector = bGood ? `பெண் ${GRAHA_INFO[b.lord].ta}` : `ஆண் ${GRAHA_INFO[g.lord].ta}`;
-      const protectorEn = bGood ? `Bride ${b.lord}` : `Groom ${g.lord}`;
-      windows.push({
-        date: fmtLong(s, 'en'), kind: 'protective',
-        detail: {
-          ta: `பாதுகாப்பு காலம்: ${protector} கேந்திர/திரிகோண தசா — மற்றவரின் கடின தசாவை சமநிலைப்படுத்தும்`,
-          en: `Protective period: ${protectorEn} Kendra/Trikona dasa offsets the partner's challenging dasa`,
-        },
-      });
-      score += 5;
-    }
-  }));
-
-  score = Math.max(15, Math.min(95, score));
+function sarpaLabel(info: SarpaInfo): Bilingual {
+  if (!info.has) {
+    return {
+      ta: 'சர்ப்ப தோஷம் இல்லை (லக்ன 1, 2-ம் வீடுகளில் ராகு/கேது இல்லை)',
+      en: 'No Sarpa Dosha (Rahu/Ketu not in Lagna 1st/2nd houses)',
+    };
+  }
+  const placeTa = (p: { planet: string; house: number }) =>
+    p.house === 1 ? `${GRAHA_INFO[p.planet].ta} லக்னத்தில் (1-ம் வீடு)`
+      : p.house === 2 ? `${GRAHA_INFO[p.planet].ta} லக்னத்திற்கு 2-ம் வீட்டில்`
+        : `${GRAHA_INFO[p.planet].ta} லக்னத்திற்கு ${p.house}-ம் வீட்டில்`;
+  const placeEn = (p: { planet: string; house: number }) =>
+    p.house === 1 ? `${p.planet} in Lagna (1st house)`
+      : p.house === 2 ? `${p.planet} in 2nd house from Lagna`
+        : `${p.planet} in ${p.house}th house from Lagna`;
+  const reliefTa = [
+    info.jupiterRelief ? 'குரு பார்வை பரிகாரம்' : '',
+    info.beneficSignRelief ? 'சுப ராசி விதிவிலக்கு' : '',
+  ].filter(Boolean).join(' · ');
+  const reliefEn = [
+    info.jupiterRelief ? 'Jupiter aspect remedy' : '',
+    info.beneficSignRelief ? 'Benefic sign exception' : '',
+  ].filter(Boolean).join(' · ');
   return {
-    windows, score,
-    summary: {
-      ta: `அடுத்த 25 ஆண்டுகளில் ${windows.filter((w) => w.kind === 'sandhi').length} தசா சந்திப்புகள், ${windows.filter((w) => w.kind === 'sameMaha' || w.kind === 'sameMahaBhukti').length} ஒரே-தசா சந்திப்புகள், ${windows.filter((w) => w.kind === 'protective').length} பாதுகாப்பு காலங்கள்.`,
-      en: `Over 25 years: ${windows.filter((w) => w.kind === 'sandhi').length} Dasa Sandhi windows, ${windows.filter((w) => w.kind === 'sameMaha' || w.kind === 'sameMahaBhukti').length} same-dasa collisions, ${windows.filter((w) => w.kind === 'protective').length} protective windows.`,
-    },
+    ta: `சர்ப்ப தோஷம் உள்ளது — ${info.placements.map(placeTa).join(', ')} · அச்சு: Lagna ${info.axis}${reliefTa ? ` · ${reliefTa}` : ''}`,
+    en: `Sarpa Dosha present — ${info.placements.map(placeEn).join(', ')} · axis: Lagna ${info.axis}${reliefEn ? ` · ${reliefEn}` : ''}`,
   };
+}
+
+// ---------- Module D: 20-Year Dasa-Bhukti Family & Spouse Impact ----------
+const MONTH_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTH_TA = ['ஜன', 'பிப்', 'மார்', 'ஏப்', 'மே', 'ஜூன்', 'ஜூலை', 'ஆக', 'செப்', 'அக்', 'நவ', 'டிச'];
+export const fmtYM = (dt: Date, lang: 'ta' | 'en') =>
+  lang === 'ta' ? `${MONTH_TA[dt.getMonth()]} ${dt.getFullYear()}` : `${MONTH_EN[dt.getMonth()]} ${dt.getFullYear()}`;
+export const fmtRange = (a: Date, b: Date, lang: 'ta' | 'en') => `${fmtYM(a, lang)} – ${fmtYM(b, lang)}`;
+
+export const IMPACT_LABEL: Record<ImpactLevel, Bilingual> = {
+  low: { ta: 'பாதுகாப்பானது', en: 'Secure' },
+  moderate: { ta: 'மிதமான கவனம்', en: 'Moderate care' },
+  high: { ta: 'பரிகாரம் தேவை', en: 'Remedy needed' },
+};
+export const CELL_LABEL: Record<ImpactLevel, Bilingual> = {
+  low: { ta: 'குறைவு', en: 'Low' },
+  moderate: { ta: 'மிதமான தாக்கம்', en: 'Moderate impact' },
+  high: { ta: 'அதிக தாக்கம்', en: 'High impact' },
+};
+
+function lordOfHouse(d: Dossier, h: number): string {
+  return RASI_LORDS[(d.lagnaRasi + h - 1) % 12];
+}
+
+/** Strong Kendra/Trikona (1,4,5,7,9,10) lord from lagna — or Jupiter/Venus protective period. */
+function isProtectiveLord(d: Dossier, lord: string): boolean {
+  const owned = (OWN[lord] ?? []).map((r) => houseFrom(d.lagnaRasi, r));
+  const kendraTri = owned.some((h) => [1, 4, 5, 7, 9, 10].includes(h)) && !owned.some((h) => [6, 8, 12].includes(h));
+  return kendraTri || lord === 'Jupiter' || lord === 'Venus';
+}
+
+/** Does the partner run a protective Dasa-Bhukti during [s,e]? */
+function partnerProtective(other: Dossier, s: Date, e: Date): boolean {
+  for (const m of other.dasa) {
+    for (const b of m.bhuktis) {
+      const os = b.start.getTime() > s.getTime() ? b.start.getTime() : s.getTime();
+      const oe = b.end.getTime() < e.getTime() ? b.end.getTime() : e.getTime();
+      if (oe <= os) continue;
+      if (isProtectiveLord(other, m.lord) || isProtectiveLord(other, b.lord)) return true;
+    }
+  }
+  return false;
+}
+
+interface PeriodEval {
+  family: { level: ImpactLevel; note: Bilingual };
+  spouse: { level: ImpactLevel; notes: Bilingual[] };
+  protection: Bilingual[];
+  rawFamily: ImpactLevel; rawSpouse: ImpactLevel;
+  strong: boolean;
+}
+
+function evalPeriod(d: Dossier, other: Dossier, maha: string, bhukti: string, s: Date, e: Date, side: 'groom' | 'bride'): PeriodEval {
+  const lords = [maha, bhukti];
+  const jup = gm(d, 'Jupiter');
+  const protection: Bilingual[] = [];
+
+  // ---- A. Family stability (2, 4, 12 & 6/8) ----
+  const dusthanaLords = [6, 8, 12].map((h) => lordOfHouse(d, h));
+  const badFamilyHouses = [2, 4, 6, 8, 12];
+  const t1Lords = lords.filter((l) => dusthanaLords.includes(l) || badFamilyHouses.includes(houseFrom(d.lagnaRasi, gm(d, l).rasi)));
+  const mutual = (() => {
+    const h = houseFrom(gm(d, maha).rasi, gm(d, bhukti).rasi);
+    return [6, 8].includes(h) ? '6/8 (சஷ்டாஷ்டகம்)' as const : [2, 12].includes(h) ? '2/12 (துவிர்துவாதசம்)' as const : null;
+  })();
+  const lord2 = lordOfHouse(d, 2), lord4 = lordOfHouse(d, 4);
+  const afflicts24 = (l: string) => [lord2, lord4].some((t) => {
+    const tr = gm(d, t).rasi;
+    return gm(d, l).rasi === tr || gm(d, l).aspectDetails.some((a) => a.targetRasi === tr);
+  });
+  const t2 = mutual !== null && (afflicts24(maha) || afflicts24(bhukti));
+  const rawFamily: ImpactLevel = t2 ? 'high' : t1Lords.length > 0 ? 'moderate' : 'low';
+
+  const famPartsTa: string[] = [];
+  const famPartsEn: string[] = [];
+  if (t1Lords.length > 0) {
+    const names = t1Lords.map((l) => GRAHA_INFO[l].ta).join('/');
+    const namesEn = t1Lords.join('/');
+    famPartsTa.push(`${names} — 6/8/12-ம் அதிபதி அல்லது 2/4/6/8/12-ல் நிலை`);
+    famPartsEn.push(`${namesEn} — 6th/8th/12th lord or in 2/4/6/8/12`);
+  }
+  if (t2) {
+    famPartsTa.push(`தசா-புக்தி ${mutual} + 2/4 அதிபதி பாதிப்பு`);
+    famPartsEn.push(`Dasa-Bhukti ${mutual} afflicting 2nd/4th lord`);
+  }
+
+  // ---- exceptions (family) ----
+  const flagged = new Set([...t1Lords, ...(t2 ? lords : [])]);
+  const reliefOwn = [...flagged].some((l) => l === maha || l === bhukti ? ['own', 'exalt'].includes(gm(d, l).dignityKey) : false);
+  const reliefJup = [...flagged].some((l) =>
+    (l === maha || l === bhukti) && (gm(d, l).rasi === jup.rasi || gm(d, l).aspectsReceived.some((a) => a.from === 'Jupiter')));
+  const reliefPartner = rawFamily !== 'low' && partnerProtective(other, s, e);
+  if (rawFamily !== 'low' && reliefOwn) protection.push({ ta: 'தசை/புக்தி அதிபதி ஆட்சி/உச்சம்', en: 'Dasa/Bhukti lord in own/exalted sign' });
+  if (rawFamily !== 'low' && reliefJup) protection.push({ ta: 'குரு பார்வை/சேர்க்கை', en: 'Jupiter aspect/conjunction' });
+  if (reliefPartner) {
+    protection.push({
+      ta: `இணையர் ஜாதகத்தில் கேந்திர/திரிகோண அல்லது குரு/சுக்கிர பாதுகாப்பு தசா-புக்தி (${fmtRange(s, e, 'ta')})`,
+      en: `Partner runs Kendra/Trikona or Jupiter/Venus protective Dasa-Bhukti (${fmtRange(s, e, 'en')})`,
+    });
+  }
+  const familyMitigated = rawFamily !== 'low' && (reliefOwn || reliefJup || reliefPartner);
+  const family: { level: ImpactLevel; note: Bilingual } = {
+    level: familyMitigated ? 'low' : rawFamily,
+    note: famPartsTa.length
+      ? {
+        ta: `${familyMitigated ? 'குறைவு / பாதுகாப்பு உண்டு — ' : ''}${famPartsTa.join(' · ')}`,
+        en: `${familyMitigated ? 'Low / protected — ' : ''}${famPartsEn.join(' · ')}`,
+      }
+      : { ta: 'குறைவு', en: 'Low' },
+  };
+
+  // ---- B. Spouse wellbeing ----
+  const lord7 = lordOfHouse(d, 7), lord8 = lordOfHouse(d, 8), lord2s = lordOfHouse(d, 2);
+  const h7Rasi = (d.lagnaRasi + 6) % 12, h8Rasi = (d.lagnaRasi + 7) % 12;
+  const malefics = ['Mars', 'Saturn', 'Rahu', 'Ketu'];
+  const karaka = side === 'groom' ? 'Venus' : 'Jupiter';
+  const spouseTa = side === 'groom'
+    ? { health: 'மனைவி ஆரோக்கிய கவனம்', care: 'கருத்து வேறுபாடு', distance: 'பிரிவு / வேலை நிமித்தமான தூரம்' }
+    : { health: 'மாங்கல்ய ஸ்தான கவனம்', care: 'கணவர் நலன் & தொழில் கவனம்', distance: 'கருத்து வேறுபாடு' };
+  const spouseEn = side === 'groom'
+    ? { health: "Wife's health attention", care: 'Marital friction / differing views', distance: 'Separation / work-related distance' }
+    : { health: 'Mangalya / longevity attention', care: "Husband's wellbeing & career attention", distance: 'Domestic friction' };
+  const flags = new Set<string>();
+  for (const l of lords) {
+    const g = gm(d, l);
+    if (l === lord7) flags.add('kalathra');
+    if (l === lord8) flags.add('h8');
+    if (l === lord2s) flags.add('maraka');
+    if (l === karaka) flags.add('karaka');
+    if (malefics.includes(l)) {
+      const h = houseFrom(d.lagnaRasi, g.rasi);
+      const asp7 = g.aspectDetails.some((a) => a.targetRasi === h7Rasi);
+      const asp8 = g.aspectDetails.some((a) => a.targetRasi === h8Rasi);
+      if (h === 7 || asp7) flags.add('malefic7');
+      if (h === 8 || asp8) flags.add('malefic8');
+      if (l === 'Saturn' || l === 'Rahu') flags.add('distance');
+    }
+  }
+  const notes: Bilingual[] = [];
+  const addNote = (key: string, ta: string, en: string) => {
+    if (flags.has(key) && !notes.some((n) => n.ta === ta)) notes.push({ ta, en });
+  };
+  if (side === 'groom') {
+    addNote('h8', spouseTa.health, spouseEn.health);
+    addNote('maraka', spouseTa.health, spouseEn.health);
+    addNote('malefic8', spouseTa.health, spouseEn.health);
+    addNote('kalathra', spouseTa.care, spouseEn.care);
+    addNote('karaka', spouseTa.care, spouseEn.care);
+    addNote('malefic7', spouseTa.care, spouseEn.care);
+    addNote('distance', spouseTa.distance, spouseEn.distance);
+  } else {
+    addNote('h8', spouseTa.health, spouseEn.health);
+    addNote('malefic8', spouseTa.health, spouseEn.health);
+    addNote('kalathra', spouseTa.care, spouseEn.care);
+    addNote('karaka', spouseTa.care, spouseEn.care);
+    addNote('maraka', spouseTa.care, spouseEn.care);
+    addNote('malefic7', spouseTa.distance, spouseEn.distance);
+    addNote('distance', spouseTa.care, spouseEn.care);
+  }
+  const healthClass = side === 'groom'
+    ? ['h8', 'maraka', 'malefic8'].some((k) => flags.has(k))
+    : ['h8', 'malefic8'].some((k) => flags.has(k));
+  const rawSpouse: ImpactLevel = notes.length === 0 ? 'low' : healthClass ? 'high' : 'moderate';
+
+  const spouseMitigated = rawSpouse !== 'low' && (reliefOwn || reliefJup || reliefPartner);
+  const spouse: { level: ImpactLevel; notes: Bilingual[] } = {
+    level: spouseMitigated ? 'low' : rawSpouse,
+    notes: notes.length ? notes : [{ ta: 'குறைவு', en: 'Low' }],
+  };
+  if (spouseMitigated && !protection.length) {
+    protection.push({ ta: 'விதிவிலக்கு (ஆட்சி/உச்சம் அல்லது குரு பார்வை)', en: 'Exception (own/exalt or Jupiter aspect)' });
+  }
+
+  const strong = isProtectiveLord(d, maha) || isProtectiveLord(d, bhukti);
+  return { family, spouse, protection, rawFamily, rawSpouse, strong };
+}
+
+function chart20(d: Dossier, other: Dossier, now: Date, horizon: Date, side: 'groom' | 'bride'): D20Chart {
+  const rows: DbPeriodRow[] = [];
+  for (const m of d.dasa) {
+    for (const b of m.bhuktis) {
+      if (b.end.getTime() <= now.getTime() || b.start.getTime() >= horizon.getTime()) continue;
+      const ev = evalPeriod(d, other, m.lord, b.lord, b.start, b.end, side);
+      rows.push({
+        start: b.start, end: b.end, maha: m.lord, bhukti: b.lord,
+        family: ev.family, spouse: ev.spouse, protection: ev.protection, strong: ev.strong,
+      });
+    }
+  }
+  // badge aggregation: any unmitigated high → high; else any moderate / mitigated-high → moderate; else low
+  const agg = (rows.map((r) => r.family.level).includes('high') ? 'high'
+    : rows.map((r) => r.family.level).includes('moderate') ? 'moderate' : 'low') as ImpactLevel;
+  const spouseAgg = (rows.map((r) => r.spouse.level).includes('high') ? 'high'
+    : rows.map((r) => r.spouse.level).includes('moderate') ? 'moderate' : 'low') as ImpactLevel;
+  return { rows, familyBadge: agg, spouseBadge: spouseAgg };
+}
+
+function moduleD20(bride: Dossier, groom: Dossier, now: Date): ModuleD20 {
+  const horizon = new Date(now.getTime() + 20 * YR);
+  const g = chart20(groom, bride, now, horizon, 'groom');
+  const b = chart20(bride, groom, now, horizon, 'bride');
+
+  // overlap windows: high-risk (both stressed, no protection) vs protected (one stressed, other strong)
+  const raw: OverlapWindow[] = [];
+  for (const gr of g.rows) {
+    for (const br of b.rows) {
+      const s = gr.start.getTime() > br.start.getTime() ? gr.start.getTime() : br.start.getTime();
+      const e = gr.end.getTime() < br.end.getTime() ? gr.end.getTime() : br.end.getTime();
+      if (e <= s) continue;
+      const gStress = gr.family.level !== 'low' || gr.spouse.level !== 'low';
+      const bStress = br.family.level !== 'low' || br.spouse.level !== 'low';
+      const anyProtection = gr.protection.length > 0 || br.protection.length > 0;
+      if (gStress && bStress && !anyProtection) {
+        raw.push({
+          start: new Date(s), end: new Date(e), kind: 'highRisk',
+          detail: {
+            ta: `அதிக ஆபத்து சாளரம்: ${fmtRange(new Date(s), new Date(e), 'ta')} — இரு ஜாதகங்களிலும் குடும்ப/துணை தாக்கம் (பரஸ்பர பாதுகாப்பு இல்லை)`,
+            en: `High-risk window: ${fmtRange(new Date(s), new Date(e), 'en')} — family/spouse stress in both charts without mutual protection`,
+          },
+        });
+      } else if ((gStress !== bStress) && ((gStress && (br.strong || br.protection.length > 0)) || (bStress && (gr.strong || gr.protection.length > 0)))) {
+        raw.push({
+          start: new Date(s), end: new Date(e), kind: 'protected',
+          detail: {
+            ta: `பாதுகாப்பு சாளரம்: ${fmtRange(new Date(s), new Date(e), 'ta')} — ஒரு தரப்பின் வலுவான தசா-புக்தி மற்றவரின் கடின காலத்தை சமநிலைப்படுத்துகிறது`,
+            en: `Protected window: ${fmtRange(new Date(s), new Date(e), 'en')} — one partner's strong Dasa-Bhukti balances the other's tough period`,
+          },
+        });
+      }
+    }
+  }
+  // merge overlapping same-kind windows
+  raw.sort((x, y) => x.start.getTime() - y.start.getTime());
+  const overlaps: OverlapWindow[] = [];
+  for (const w of raw) {
+    const last = overlaps[overlaps.length - 1];
+    if (last && last.kind === w.kind && w.start.getTime() <= last.end.getTime()) {
+      if (w.end.getTime() > last.end.getTime()) last.end = w.end;
+    } else overlaps.push({ ...w });
+  }
+
+  let score = 72;
+  overlaps.forEach((w) => { score += w.kind === 'highRisk' ? -10 : 5; });
+  score = Math.max(15, Math.min(95, score));
+
+  const fromYear = now.getFullYear(), toYear = fromYear + 20;
+  const highCount = overlaps.filter((w) => w.kind === 'highRisk').length;
+  const protCount = overlaps.filter((w) => w.kind === 'protected').length;
+  const summary: Bilingual = {
+    ta: `அடுத்த 20 ஆண்டுகள் (${fromYear} – ${toYear}): ஆண் ஜாதகம் — குடும்பம் ${IMPACT_LABEL[g.familyBadge].ta}, மனைவி ${IMPACT_LABEL[g.spouseBadge].ta} · பெண் ஜாதகம் — குடும்பம் ${IMPACT_LABEL[b.familyBadge].ta}, கணவர் ${IMPACT_LABEL[b.spouseBadge].ta} · ${highCount} அதிக ஆபத்து & ${protCount} பாதுகாப்பு சாளரங்கள்.`,
+    en: `Next 20 years (${fromYear} – ${toYear}): Groom — family ${IMPACT_LABEL[g.familyBadge].en}, wife ${IMPACT_LABEL[g.spouseBadge].en} · Bride — family ${IMPACT_LABEL[b.familyBadge].en}, husband ${IMPACT_LABEL[b.spouseBadge].en} · ${highCount} high-risk & ${protCount} protected windows.`,
+  };
+  return { fromYear, toYear, groom: g, bride: b, overlaps, score, summary };
 }
 
 // ---------- Module E: Bhava & Graha cross-chart ----------
@@ -330,18 +565,26 @@ export function computePorutham(bride: Dossier, groom: Dossier, now: Date): Poru
   }
 
   const bSarpa = sarpaDosha(bride), gSarpa = sarpaDosha(groom);
-  const sameState = bSarpa.has === gSarpa.has;
+  const bLabel = sarpaLabel(bSarpa), gLabel = sarpaLabel(gSarpa);
+  const bothDosha = bSarpa.has && gSarpa.has;
+  const bothClear = !bSarpa.has && !gSarpa.has;
   const mC = {
-    brideSarpa: { ta: bSarpa.has ? `ராகு-கேது அச்சு: ${bSarpa.axes.join(', ')}${bSarpa.jupiterMitigates ? ' · குரு பார்வை பரிகாரம்' : ''}` : 'சர்ப்ப தோஷம் இல்லை', en: bSarpa.has ? `Rahu-Ketu axis: ${bSarpa.axes.join(', ')}${bSarpa.jupiterMitigates ? ' · Jupiter aspect mitigation' : ''}` : 'No Sarpa Dosha' },
-    groomSarpa: { ta: gSarpa.has ? `ராகு-கேது அச்சு: ${gSarpa.axes.join(', ')}${gSarpa.jupiterMitigates ? ' · குரு பார்வை பரிகாரம்' : ''}` : 'சர்ப்ப தோஷம் இல்லை', en: gSarpa.has ? `Rahu-Ketu axis: ${gSarpa.axes.join(', ')}${gSarpa.jupiterMitigates ? ' · Jupiter aspect mitigation' : ''}` : 'No Sarpa Dosha' },
-    verdict: {
-      ta: sameState ? (bSarpa.has ? 'இரு தரப்பிலும் சர்ப்ப தோஷம் — பரஸ்பர சமநிலை' : 'இரு தரப்பிலும் சர்ப்ப தோஷம் இல்லை') : 'ஒரே தரப்பில் சர்ப்ப தோஷம் — கவன ஆய்வு தேவை',
-      en: sameState ? (bSarpa.has ? 'Sarpa Dosha on both sides — mutual balance' : 'No Sarpa Dosha on either side') : 'Sarpa Dosha on one side only — review with care',
-    },
-    score: sameState ? (bSarpa.has ? (bSarpa.jupiterMitigates || gSarpa.jupiterMitigates ? 80 : 68) : 95) : 42,
+    brideSarpa: bLabel,
+    groomSarpa: gLabel,
+    brideInfo: bSarpa,
+    groomInfo: gSarpa,
+    verdict: bothDosha
+      ? { ta: 'சம தோஷம் — பொருத்தமானது (Balanced Sarpa Dosha) — இரு தரப்பிலும் லக்ன ராகு-கேது 1/2 (7/8) நிலை', en: 'Balanced Sarpa Dosha — compatible (Rahu/Ketu in Lagna 1/2 or 7/8 on both sides)' }
+      : bothClear
+        ? { ta: 'இரு தரப்பிலும் சர்ப்ப தோஷம் இல்லை (லக்ன 1, 2-ம் வீடுகள் தெளிவு)', en: 'No Sarpa Dosha on either side (Lagna 1st/2nd clear)' }
+        : ((bSarpa.has ? bSarpa : gSarpa).jupiterRelief || (bSarpa.has ? bSarpa : gSarpa).beneficSignRelief)
+          ? { ta: 'ஒரே தரப்பில் சர்ப்ப தோஷம் — குரு பார்வை/சுப ராசி பரிகாரத்தால் தணிக்கப்படுகிறது', en: 'Sarpa Dosha on one side — mitigated by Jupiter aspect / benefic sign exception' }
+          : { ta: 'ஒரே தரப்பில் சர்ப்ப தோஷம் — கவன ஆய்வு & பரிகாரம் தேவை', en: 'Sarpa Dosha on one side only — review with care & remedy needed' },
+    score: bothDosha ? 100 : bothClear ? 95
+      : ((bSarpa.has ? bSarpa : gSarpa).jupiterRelief || (bSarpa.has ? bSarpa : gSarpa).beneficSignRelief) ? 55 : 30,
   };
 
-  const mD = moduleD(bride, groom, now);
+  const mD = moduleD20(bride, groom, now);
   const mE = moduleE(bride, groom);
 
   const total = Math.round(A.score * 0.45 + mB.score * 0.12 + mC.score * 0.08 + mD.score * 0.10 + mE.score * 0.25);
@@ -357,12 +600,14 @@ export function computePorutham(bride: Dossier, groom: Dossier, now: Date): Poru
   A.rows.filter((r) => r.points / r.max < 0.45).forEach((r) => cautions.push({ ta: `${r.name.ta}: ${r.detail.ta}`, en: `${r.name.en}: ${r.detail.en}` }));
   if (verdictKey === 'mismatch') cautions.push({ ta: mB.verdict.ta, en: mB.verdict.en });
   if (!mC.verdict.ta.includes('இல்லை') && mC.score < 60) cautions.push({ ta: mC.verdict.ta, en: mC.verdict.en });
-  mD.windows.filter((w) => w.kind === 'sandhi').slice(0, 2).forEach((w) => cautions.push({ ta: w.detail.ta, en: w.detail.en }));
+  mD.overlaps.filter((w) => w.kind === 'highRisk').slice(0, 2).forEach((w) => cautions.push({ ta: w.detail.ta, en: w.detail.en }));
   if (mE.score >= 60) strengths.push({ ta: `கலத்திர பாவ பலம் & காரகங்கள் வலுவாக உள்ளன (${mE.score}/100)`, en: `Kalathra bhava & karakas are strong (${mE.score}/100)` });
+  const protCount = mD.overlaps.filter((w) => w.kind === 'protected').length;
+  if (protCount > 0) strengths.push({ ta: `அடுத்த 20 ஆண்டுகளில் ${protCount} பாதுகாப்பு தசா-புக்தி சாளரங்கள் (இணையர் பரஸ்பர பாதுகாப்பு)`, en: `${protCount} protective Dasa-Bhukti windows in the next 20 years (mutual partner protection)` });
 
   const outlook: Bilingual = {
-    ta: `திருமணத்திற்குப் பின் முதல் காலம்: ${mD.windows.filter((w) => w.kind === 'protective').length} பாதுகாப்பு தசா சந்திப்புகள் உள்ளன. மொத்த பொருத்த மதிப்பெண் ${total}/100 — ${fv.ta}. ரஜ்ஜு/யோனி போன்ற முக்கிய பொருத்தங்களை முன்னிலைப்படுத்தி முடிவெடுக்கவும்.`,
-    en: `Post-marriage outlook: ${mD.windows.filter((w) => w.kind === 'protective').length} protective dasa windows ahead. Overall ${total}/100 — ${fv.en}. Give precedence to critical matches like Rajju and Yoni before deciding.`,
+    ta: `அடுத்த 20 ஆண்டு (${mD.fromYear} – ${mD.toYear}) தசா-புக்தி ஆய்வு: ஆண் — குடும்பம் ${IMPACT_LABEL[mD.groom.familyBadge].ta}, மனைவி ${IMPACT_LABEL[mD.groom.spouseBadge].ta}; பெண் — குடும்பம் ${IMPACT_LABEL[mD.bride.familyBadge].ta}, கணவர் ${IMPACT_LABEL[mD.bride.spouseBadge].ta}. மொத்த பொருத்த மதிப்பெண் ${total}/100 — ${fv.ta}. ரஜ்ஜு/யோனி போன்ற முக்கிய பொருத்தங்களை முன்னிலைப்படுத்தி முடிவெடுக்கவும்.`,
+    en: `20-Year Dasa-Bhukti outlook (${mD.fromYear} – ${mD.toYear}): Groom — family ${IMPACT_LABEL[mD.groom.familyBadge].en}, wife ${IMPACT_LABEL[mD.groom.spouseBadge].en}; Bride — family ${IMPACT_LABEL[mD.bride.familyBadge].en}, husband ${IMPACT_LABEL[mD.bride.spouseBadge].en}. Overall ${total}/100 — ${fv.en}. Give precedence to critical matches like Rajju and Yoni before deciding.`,
   };
 
   return {
